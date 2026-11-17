@@ -64,7 +64,8 @@ int hm_dcb_decode(const uint8_t *dcb, size_t n, hm_dcb_t *out)
     }
     out->temp_format = dcb[HM_IDX_TEMP_FORMAT];
     out->switch_diff = dcb[HM_IDX_SWITCH_DIFF];
-    out->frost_enable = dcb[HM_IDX_FROST_ENABLE];
+    out->frost_raw = dcb[HM_IDX_FROST_ENABLE];
+    out->frost_enabled = out->frost_raw == 0;
     out->calibration_raw = be16(&dcb[HM_IDX_CALIBRATION]);
     out->output_delay = dcb[HM_IDX_OUTPUT_DELAY];
     out->address = dcb[HM_IDX_ADDRESS];
@@ -164,8 +165,8 @@ void hm_dcb_print(FILE *f, const hm_dcb_t *d)
     fprintf(f, "  %-22s %s, %s\n", "Power / run mode", d->on_off ? "on" : "off",
             d->run_mode ? "frost protection" : "heating");
     fprintf(f, "  %-22s %u C\n", "Set temperature", d->set_temp);
-    fprintf(f, "  %-22s %s, %u C\n", "Frost protection", d->frost_enable ? "enabled" : "disabled",
-            d->frost_temp);
+    fprintf(f, "  %-22s %s, %u C (byte 7 = %02X)\n", "Frost protection",
+            d->frost_enabled ? "enabled" : "disabled", d->frost_temp, d->frost_raw);
     print_temp(f, "Built-in air temp", d->air_t10);
     print_temp(f, "Remote air temp", d->remote_air_t10);
     print_temp(f, "Floor temp", d->floor_t10);
