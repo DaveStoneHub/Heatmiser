@@ -7,14 +7,14 @@ milestones, presents them as Matter thermostats with a touchscreen controller.
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 1, bus bring-up
+## Status: milestone 1, bus bring-up (gate passed 17 Nov 2026)
 
 | Part | State |
 | --- | --- |
 | `hm_proto`: V3 frames, CRC, DCB decoder (pure C) | Done, host tested |
 | `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time, turnaround timing | Done, needs the bench |
 | Bench console: `read`, `scan`, `turnaround`, `sniff`, `soak` | Done, needs the bench |
-| Turnaround measured, A/B polarity confirmed, 1-hour clean soak | Bench steps, see [docs/bench-bringup.md](docs/bench-bringup.md) |
+| Turnaround measured, A/B polarity confirmed, 1-hour clean soak | Done on the bench, see [Bench results](docs/bench-bringup.md#bench-results-17-nov-2026) |
 
 ## Layout
 
