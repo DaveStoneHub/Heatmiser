@@ -82,6 +82,9 @@ const hm_bus_config_t *hm_bus_config(void);
 void hm_bus_set_master(uint8_t addr);
 void hm_bus_set_timing(uint32_t reply_timeout_ms, uint32_t gap_ms);
 
+/* Move the UART to other TX/RX pins at run time (for bench checks). */
+esp_err_t hm_bus_set_pins(int tx_gpio, int rx_gpio);
+
 /* Send a pre-built request and collect one reply. expect_stat is the source
  * address the reply must carry (0 = any). Waits the bus gap before returning. */
 esp_err_t hm_bus_transact(const uint8_t *req, size_t req_len, uint8_t expect_stat, hm_txn_t *t);

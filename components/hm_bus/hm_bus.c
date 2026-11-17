@@ -41,6 +41,8 @@ static void IRAM_ATTR rx_edge_isr(void *arg)
     }
 }
 
+static void edge_attach(int rx);
+
 static void edge_arm(void)
 {
     if (!s_cfg.edge_timing) {
@@ -125,12 +127,7 @@ esp_err_t hm_bus_init(const hm_bus_config_t *cfg)
             ESP_LOGW(TAG, "GPIO ISR service: %s; edge timing off", esp_err_to_name(err));
             s_cfg.edge_timing = false;
         } else {
-            gpio_set_intr_type(s_cfg.rx_gpio, GPIO_INTR_NEGEDGE);
-            gpio_intr_disable(s_cfg.rx_gpio);
-            if (gpio_isr_handler_add(s_cfg.rx_gpio, rx_edge_isr, NULL) != ESP_OK) {
-                ESP_LOGW(TAG, "edge ISR not added; edge timing off");
-                s_cfg.edge_timing = false;
-            }
+            edge_attach(s_cfg.rx_gpio);
         }
     }
 
@@ -162,6 +159,49 @@ void hm_bus_set_timing(uint32_t reply_timeout_ms, uint32_t gap_ms)
     if (reply_timeout_ms) s_cfg.reply_timeout_ms = reply_timeout_ms;
     if (gap_ms) s_cfg.gap_ms = gap_ms;
     xSemaphoreGive(s_lock);
+}
+
+static void edge_attach(int rx)
+{
+    gpio_set_intr_type(rx, GPIO_INTR_NEGEDGE);
+    gpio_intr_disable(rx);
+    if (gpio_isr_handler_add(rx, rx_edge_isr, NULL) != ESP_OK) {
+        ESP_LOGW(TAG, "edge ISR not added; edge timing off");
+        s_cfg.edge_timing = false;
+    }
+}
+
+esp_err_t hm_bus_set_pins(int tx_gpio, int rx_gpio)
+{
+    if (!s_ready || tx_gpio == rx_gpio || !GPIO_IS_VALID_OUTPUT_GPIO(tx_gpio) ||
+        !GPIO_IS_VALID_GPIO(rx_gpio)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    if (s_cfg.edge_timing) {
+        gpio_intr_disable(s_cfg.rx_gpio);
+        gpio_isr_handler_remove(s_cfg.rx_gpio);
+        gpio_set_intr_type(s_cfg.rx_gpio, GPIO_INTR_DISABLE);
+    }
+    /* Release the old pins so neither keeps its UART routing. */
+    gpio_reset_pin(s_cfg.tx_gpio);
+    gpio_reset_pin(s_cfg.rx_gpio);
+    esp_err_t err = uart_set_pin(s_cfg.uart_num, tx_gpio, rx_gpio, UART_PIN_NO_CHANGE,
+                                 UART_PIN_NO_CHANGE);
+    if (err == ESP_OK) {
+        s_cfg.tx_gpio = tx_gpio;
+        s_cfg.rx_gpio = rx_gpio;
+    }
+    gpio_set_pull_mode(s_cfg.rx_gpio, GPIO_PULLUP_ONLY);
+    if (s_cfg.edge_timing) {
+        edge_attach(s_cfg.rx_gpio);
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+    uart_flush_input(s_cfg.uart_num);
+    drain_events();
+    xSemaphoreGive(s_lock);
+    ESP_LOGI(TAG, "pins now TX=GPIO%d RX=GPIO%d", s_cfg.tx_gpio, s_cfg.rx_gpio);
+    return err;
 }
 
 static TickType_t ticks_until(int64_t deadline_us)
