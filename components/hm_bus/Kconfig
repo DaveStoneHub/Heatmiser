@@ -10,11 +10,16 @@ menu "Heatmiser RS485 bus"
 
     config HM_BUS_TX_GPIO
         int "TX GPIO (to transceiver DI)"
-        default 15
+        default 16
+        help
+            Waveshare's own RS485 demo for the ESP32-S3-Touch-LCD-7 transmits
+            on GPIO16 and receives on GPIO15, the reverse of the wiki's pin
+            table. Field reports agree with the demo. The console command
+            "pins swap" flips them at run time if a board differs.
 
     config HM_BUS_RX_GPIO
         int "RX GPIO (from transceiver RO)"
-        default 16
+        default 15
 
     config HM_BUS_BAUD
         int "Baud rate"

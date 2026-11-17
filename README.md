@@ -12,7 +12,7 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | Part | State |
 | --- | --- |
 | `hm_proto`: V3 frames, CRC, DCB decoder (pure C) | Done, host tested |
-| `hm_bus`: UART1 at 4800 8N1 on GPIO15/16, one transaction at a time, turnaround timing | Done, needs the bench |
+| `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time, turnaround timing | Done, needs the bench |
 | Bench console: `read`, `scan`, `turnaround`, `sniff`, `soak` | Done, needs the bench |
 | Turnaround measured, A/B polarity confirmed, 1-hour clean soak | Bench steps, see [docs/bench-bringup.md](docs/bench-bringup.md) |
 

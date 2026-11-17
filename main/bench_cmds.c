@@ -303,6 +303,31 @@ static int cmd_timing(int argc, char **argv)
     return 0;
 }
 
+static int cmd_pins(int argc, char **argv)
+{
+    const hm_bus_config_t *c = hm_bus_config();
+    int tx = c->tx_gpio, rx = c->rx_gpio;
+    if (argc == 2 && strcmp(argv[1], "swap") == 0) {
+        int t = tx;
+        tx = rx;
+        rx = t;
+    } else if (argc == 3) {
+        if (bench_parse_int(argv[1], 0, 0, 48, &tx) || bench_parse_int(argv[2], 0, 0, 48, &rx)) {
+            return 1;
+        }
+    } else if (argc != 1) {
+        printf("usage: pins | pins swap | pins <tx_gpio> <rx_gpio>\n");
+        return 1;
+    }
+    if (argc > 1 && hm_bus_set_pins(tx, rx) != ESP_OK) {
+        printf("could not move the UART to TX=GPIO%d RX=GPIO%d\n", tx, rx);
+        return 1;
+    }
+    printf("RS485 UART%d: TX=GPIO%d RX=GPIO%d (until reboot; set the default in menuconfig)\n",
+           c->uart_num, c->tx_gpio, c->rx_gpio);
+    return 0;
+}
+
 void bench_register_commands(void)
 {
     const esp_console_cmd_t cmds[] = {
@@ -318,6 +343,8 @@ void bench_register_commands(void)
           .hint = "[reset]", .func = cmd_stats },
         { .command = "master", .help = "Show or set the bridge's master address (0x81-0xA0)",
           .hint = "[addr]", .func = cmd_master },
+        { .command = "pins", .help = "Show the RS485 UART pins, swap TX and RX, or set them",
+          .hint = "[swap | <tx> <rx>]", .func = cmd_pins },
         { .command = "timing", .help = "Show or set reply timeout and inter-frame gap",
           .hint = "[timeout_ms] [gap_ms]", .func = cmd_timing },
     };
