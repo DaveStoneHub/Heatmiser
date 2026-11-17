@@ -39,6 +39,11 @@ class Tracker:
         self.result_line = None
 
     def feed(self, line, now):
+        if 'already running' in line and not self.started:
+            # A soak was started before this logger attached; follow it.
+            self.started = True
+            self.last_progress_at = now
+            return None
         if line.startswith('HMBRIDGE-BOOT') and self.started:
             self.resets += 1
             return 'RESET'
@@ -114,18 +119,31 @@ def run(args):
         ser.flush()
 
     tracker = Tracker()
-    time.sleep(0.5)
-    ser.reset_input_buffer()
-    if not args.no_start:
-        send('')
-        time.sleep(0.3)
-        send(f'soak start {args.addr} {args.seconds} {args.period}')
+    # Some USB-serial adapters reset the board when the port opens. Give it
+    # time to boot before sending anything, and resend the start command if
+    # the board never acknowledges it.
+    time.sleep(3.0)
+    start_cmd = f'soak start {args.addr} {args.seconds} {args.period}'
+    start_attempts = 0
+    next_start_at = time.time()
 
     stall_s = 180  # progress lines come once a minute
     deadline = time.time() + args.seconds + 300
     buf = b''
     try:
         while True:
+            now = time.time()
+            if not args.no_start and not tracker.started and now >= next_start_at:
+                if start_attempts >= 5:
+                    print('!! The board never acknowledged the soak start command.')
+                    return tracker.report()
+                if start_attempts:
+                    print('No SOAK-START yet; sending the start command again.')
+                send('')
+                time.sleep(0.3)
+                send(start_cmd)
+                start_attempts += 1
+                next_start_at = now + 5
             chunk = ser.read(256)
             now = time.time()
             if chunk:
