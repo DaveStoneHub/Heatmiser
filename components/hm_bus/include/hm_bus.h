@@ -89,6 +89,10 @@ esp_err_t hm_bus_set_pins(int tx_gpio, int rx_gpio);
  * address the reply must carry (0 = any). Waits the bus gap before returning. */
 esp_err_t hm_bus_transact(const uint8_t *req, size_t req_len, uint8_t expect_stat, hm_txn_t *t);
 
+/* The same with a reply timeout for this transaction only (0 = configured). */
+esp_err_t hm_bus_transact_timeout(const uint8_t *req, size_t req_len, uint8_t expect_stat,
+                                  uint32_t reply_timeout_ms, hm_txn_t *t);
+
 /* Read `count` bytes from unique address `start` (HM_READ_ALL for the DCB). */
 esp_err_t hm_bus_read(uint8_t stat, uint16_t start, uint16_t count, hm_txn_t *t);
 
