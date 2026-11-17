@@ -69,6 +69,10 @@ How to read the result:
 Optional check with a scope or logic analyser: run `sniff 60` on the bridge
 while nothing else is on the bus to make sure the line is quiet (no bursts).
 
+**Confirmed on Dave's bench (17 Nov 2026):** board **A** to the stat's
+**yellow** wire, board **B** to the **blue** wire, with TX=GPIO16 and
+RX=GPIO15. Reversed, reads fail.
+
 ## 2. Turnaround
 
 Run:
