@@ -67,10 +67,13 @@ void bench_print_txn(const hm_txn_t *t)
                t->turnaround_from_edge ? "start-bit edge" : "byte arrival, about +-2 ms");
     }
     if (t->t_rx_first_us && t->t_rx_last_us) {
-        printf("  Request on wire %.1f ms, reply on wire about %.1f ms, whole transaction %.1f ms\n",
+        /* Reply time on the wire is set by the baud rate; show the nominal
+         * figure rather than driver timestamps, which arrive in chunks. */
+        printf("  Request on wire %.1f ms, reply on wire %.1f ms (%u bytes at %d baud), "
+               "whole transaction %.1f ms\n",
                (t->t_tx_done_us - t->t_tx_start_us) / 1000.0,
-               (t->t_rx_last_us - t->t_rx_first_us) / 1000.0 + 2.1,
-               (t->t_rx_last_us - t->t_tx_start_us) / 1000.0);
+               t->rx_len * 10.0 * 1000.0 / hm_bus_config()->baud, (unsigned)t->rx_len,
+               hm_bus_config()->baud, (t->t_rx_last_us - t->t_tx_start_us) / 1000.0);
     }
 }
 

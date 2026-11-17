@@ -92,7 +92,25 @@ typedef struct {
     size_t n;
 } captured_t;
 
+/* PRT-N at address 1, full-DCB read from 0x81, captured 17 Nov 2026 on the bench. */
+static const uint8_t s_cap_prtn_read[] = {
+    0x81, 0x4B, 0x00, 0x01, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x40, 0x01,
+    0x13, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x14, 0x00, 0x10, 0x10, 0x1C, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE6, 0x00, 0x00, 0x01, 0x03, 0x32,
+    0x0F, 0x08, 0x00, 0x15, 0x09, 0x1E, 0x10, 0x10, 0x1E, 0x16, 0x17, 0x00,
+    0x11, 0x09, 0x00, 0x15, 0x16, 0x00, 0x10, 0x18, 0x00, 0x10, 0x18, 0x00,
+    0x10, 0xF2, 0x64,
+};
+
+/* The request that produced it, as sent by the bridge. */
+static const uint8_t s_cap_prtn_req[] = {
+    0x01, 0x0A, 0x81, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x2C, 0x09,
+};
+
 static const captured_t s_captured[] = {
+    { "PRT-N full DCB reply", s_cap_prtn_read, sizeof s_cap_prtn_read },
+    { "full DCB read request", s_cap_prtn_req, sizeof s_cap_prtn_req },
     { NULL, NULL, 0 },
 };
 
@@ -106,6 +124,46 @@ static void test_captured_frames(void)
         }
         CHECK_EQ(hm_crc16(c->bytes, c->n - 2), crc);
     }
+}
+
+static void test_captured_prtn_decode(void)
+{
+    hm_reply_t r;
+    CHECK_EQ(hm_parse_reply(s_cap_prtn_read, sizeof s_cap_prtn_read, 0x81, 1, &r), HM_OK);
+    CHECK_EQ(r.frame_len, 75);
+    CHECK_EQ(r.count, 64);
+    CHECK_EQ(appendix_crc(s_cap_prtn_read, 73), 0x64F2);
+
+    hm_dcb_t d;
+    CHECK_EQ(hm_dcb_decode(r.data, r.count, &d), 0);
+    CHECK_EQ(d.dcb_len, 64);
+    CHECK_EQ(d.model, HM_MODEL_PRT);
+    CHECK_EQ(d.vendor, 1);
+    CHECK_EQ(d.version, 19);
+    CHECK_EQ(d.address, 1);
+    CHECK_EQ(d.prog_mode, 0);
+    CHECK_EQ(d.frost_enable, 0);
+    CHECK_EQ(d.frost_temp, 16);
+    CHECK_EQ(d.set_temp, 16);
+    CHECK_EQ(d.on_off, 1);
+    CHECK_EQ(d.run_mode, 0);
+    CHECK_EQ(d.air_t10, 230);
+    CHECK_EQ(d.remote_air_t10, HM_TEMP_ABSENT);
+    CHECK_EQ(d.floor_t10, HM_TEMP_ABSENT);
+    CHECK_EQ(d.heating_on, 0);
+    CHECK_EQ(d.clk_wday, 1);
+    CHECK_EQ(d.clk_hour, 3);
+    CHECK_EQ(d.clk_min, 50);
+    CHECK_EQ(d.clk_sec, 15);
+    CHECK_EQ(d.comfort_days, 2);
+    CHECK_EQ(d.comfort[0][1].hour, 9);
+    CHECK_EQ(d.comfort[0][1].minute, 30);
+    CHECK_EQ(d.comfort[0][3].temp, 17);
+    CHECK_EQ(d.comfort[1][2].hour, 24);
+
+    /* A frame addressed to another master, or from another stat, is rejected. */
+    CHECK_EQ(hm_parse_reply(s_cap_prtn_read, sizeof s_cap_prtn_read, 0x82, 1, &r), HM_ERR_DST);
+    CHECK_EQ(hm_parse_reply(s_cap_prtn_read, sizeof s_cap_prtn_read, 0x81, 2, &r), HM_ERR_SRC);
 }
 
 /* ---- Request frames ----------------------------------------------------- */
@@ -452,6 +510,7 @@ int main(void)
     test_crc_matches_appendix();
     test_crc_residue();
     test_captured_frames();
+    test_captured_prtn_decode();
     test_build_read_full();
     test_build_read_partial();
     test_build_read_rejects();

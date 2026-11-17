@@ -230,8 +230,11 @@ static size_t rx_some(hm_txn_t *t, size_t want, TickType_t wait)
     }
     int64_t now = esp_timer_get_time();
     if (t->rx_len == 0 && t->t_rx_first_us == 0) {
-        /* The driver hands bytes over in chunks; back-date to the first. */
-        t->t_rx_first_us = now - (int64_t)(n - 1) * s_byte_us;
+        /* The driver hands bytes over in chunks, so more may already be
+         * buffered behind the ones we read: back-date over all of them. */
+        size_t buffered = 0;
+        uart_get_buffered_data_len(s_cfg.uart_num, &buffered);
+        t->t_rx_first_us = now - (int64_t)((size_t)n - 1 + buffered) * s_byte_us;
     }
     t->t_rx_last_us = now;
     t->rx_len += (size_t)n;
