@@ -1,5 +1,25 @@
 # Bench bring-up: RS485 to one PRT-N
 
+## Bench results (17 Nov 2026)
+
+**Gate passed.** One PRT-N at address 1, Waveshare ESP32-S3-Touch-LCD-7, master 0x81.
+
+| Check | Result |
+| --- | --- |
+| UART pins | TX=GPIO16, RX=GPIO15 (the wiki table has them reversed) |
+| Polarity | Board A to the stat's yellow wire, board B to blue; reversed, reads fail |
+| Turnaround, full DCB (100 reads) | min 6.76, avg 6.96, max 7.57 ms |
+| Turnaround, 1-byte read (100 reads) | min 6.79, avg 7.02, max 9.49 ms |
+| Full-DCB transaction | 188 ms (75-byte reply); about 290 ms per stat with the 100 ms gap |
+| 1-hour soak | 3,600 of 3,600 reads OK: 0 CRC, 0 timeouts, 0 partial, 0 bad, 0 UART errors, 0 resets; DCB 64 bytes throughout |
+
+Consequences for later milestones: a 12-stat full-DCB sweep is about 3.5 s,
+well inside the 10 s target, and the scan timeout can drop to about 50 ms.
+
+Still to confirm: whether DCB byte 7 (frost protection) reads 01 when the
+stat's Feature 03 is set to 00 (enabled), as the protocol doc says.
+
+
 This is milestone 1 of the build plan. The firmware side is done; these steps
 need hands on the bench. Allow about 30 minutes plus the 1-hour soak.
 
