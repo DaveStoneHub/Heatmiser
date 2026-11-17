@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host-tests:
+    name: Protocol library host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S test/host -B build-host
+      - name: Build
+        run: cmake --build build-host
+      - name: Test
+        run: ctest --test-dir build-host --output-on-failure
+
+  firmware:
+    name: ESP-IDF build (esp32s3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4.1
+          target: esp32s3
+          path: .
+
+  tools:
+    name: PC tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Frame helper matches the firmware's regression vector
+        run: test "$(python tools/hm_frame.py read 1)" = "01 0A 81 00 00 00 FF FF 2C 09"
+      - name: Soak logger parses a log
+        run: python -m py_compile tools/soak_logger.py
