@@ -1,0 +1,60 @@
+menu "Heatmiser RS485 bus"
+
+    config HM_BUS_UART_NUM
+        int "UART port"
+        range 1 2
+        default 1
+        help
+            UART used for the RS485 bus. The Waveshare ESP32-S3-Touch-LCD-7
+            wires its onboard transceiver to UART1 on GPIO15/16.
+
+    config HM_BUS_TX_GPIO
+        int "TX GPIO (to transceiver DI)"
+        default 15
+
+    config HM_BUS_RX_GPIO
+        int "RX GPIO (from transceiver RO)"
+        default 16
+
+    config HM_BUS_BAUD
+        int "Baud rate"
+        default 4800
+        help
+            Heatmiser V3 RS485 is fixed at 4800 8N1.
+
+    config HM_BUS_MASTER_ADDR
+        int "Master (bridge) address"
+        range 129 160
+        default 129
+        help
+            0x81 (129) to 0xA0 (160). 0x81 is what the MCV3 and TFT use.
+
+    config HM_BUS_DEFAULT_STAT
+        int "Default thermostat address for bench commands"
+        range 1 32
+        default 1
+
+    config HM_BUS_REPLY_TIMEOUT_MS
+        int "Reply timeout (ms) from end of request to first reply byte"
+        default 1000
+
+    config HM_BUS_INTERBYTE_TIMEOUT_MS
+        int "Inter-byte silence (ms) that ends a frame early"
+        default 50
+
+    config HM_BUS_GAP_MS
+        int "Idle bus gap (ms) after each transaction"
+        default 100
+        help
+            The V3 document asks for at least 100 ms after a reply before the
+            next frame.
+
+    config HM_BUS_EDGE_TIMING
+        bool "Timestamp the reply start bit with a GPIO interrupt on RX"
+        default y
+        help
+            Gives turnaround to a few microseconds instead of the UART
+            driver's millisecond granularity. Turn off if it ever interferes
+            with reception.
+
+endmenu
