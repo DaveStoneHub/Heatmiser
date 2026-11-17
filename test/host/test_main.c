@@ -108,7 +108,29 @@ static const uint8_t s_cap_prtn_req[] = {
     0x01, 0x0A, 0x81, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x2C, 0x09,
 };
 
+/* Same stat, Feature 03 set to 00 (frost enabled), then to 01 (disabled). */
+static const uint8_t s_cap_frost_on[] = {
+    0x81, 0x4B, 0x00, 0x01, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x40, 0x01,
+    0x13, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x14, 0x00, 0x10, 0x10, 0x1C, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xF0, 0x00, 0x00, 0x01, 0x07, 0x17,
+    0x0B, 0x08, 0x00, 0x15, 0x09, 0x1E, 0x10, 0x10, 0x1E, 0x16, 0x17, 0x00,
+    0x11, 0x09, 0x00, 0x15, 0x16, 0x00, 0x10, 0x18, 0x00, 0x10, 0x18, 0x00,
+    0x10, 0x85, 0xB3,
+};
+static const uint8_t s_cap_frost_off[] = {
+    0x81, 0x4B, 0x00, 0x01, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x40, 0x01,
+    0x13, 0x02, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x14, 0x00, 0x10, 0x10, 0x1C, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xF0, 0x00, 0x00, 0x01, 0x07, 0x19,
+    0x37, 0x08, 0x00, 0x15, 0x09, 0x1E, 0x10, 0x10, 0x1E, 0x16, 0x17, 0x00,
+    0x11, 0x09, 0x00, 0x15, 0x16, 0x00, 0x10, 0x18, 0x00, 0x10, 0x18, 0x00,
+    0x10, 0xB7, 0xE1,
+};
+
 static const captured_t s_captured[] = {
+    { "PRT-N frost enabled", s_cap_frost_on, sizeof s_cap_frost_on },
+    { "PRT-N frost disabled", s_cap_frost_off, sizeof s_cap_frost_off },
     { "PRT-N full DCB reply", s_cap_prtn_read, sizeof s_cap_prtn_read },
     { "full DCB read request", s_cap_prtn_req, sizeof s_cap_prtn_req },
     { NULL, NULL, 0 },
@@ -142,7 +164,8 @@ static void test_captured_prtn_decode(void)
     CHECK_EQ(d.version, 19);
     CHECK_EQ(d.address, 1);
     CHECK_EQ(d.prog_mode, 0);
-    CHECK_EQ(d.frost_enable, 0);
+    CHECK_EQ(d.frost_raw, 0);
+    CHECK(d.frost_enabled); /* Feature 03 was 00 (enabled) on the stat */
     CHECK_EQ(d.frost_temp, 16);
     CHECK_EQ(d.set_temp, 16);
     CHECK_EQ(d.on_off, 1);
@@ -164,6 +187,23 @@ static void test_captured_prtn_decode(void)
     /* A frame addressed to another master, or from another stat, is rejected. */
     CHECK_EQ(hm_parse_reply(s_cap_prtn_read, sizeof s_cap_prtn_read, 0x82, 1, &r), HM_ERR_DST);
     CHECK_EQ(hm_parse_reply(s_cap_prtn_read, sizeof s_cap_prtn_read, 0x81, 2, &r), HM_ERR_SRC);
+}
+
+static void test_captured_frost_flag(void)
+{
+    hm_reply_t r;
+    hm_dcb_t on, off;
+    CHECK_EQ(hm_parse_reply(s_cap_frost_on, sizeof s_cap_frost_on, 0x81, 1, &r), HM_OK);
+    CHECK_EQ(hm_dcb_decode(r.data, r.count, &on), 0);
+    CHECK_EQ(hm_parse_reply(s_cap_frost_off, sizeof s_cap_frost_off, 0x81, 1, &r), HM_OK);
+    CHECK_EQ(hm_dcb_decode(r.data, r.count, &off), 0);
+    CHECK_EQ(on.frost_raw, 0x00);
+    CHECK(on.frost_enabled);
+    CHECK_EQ(off.frost_raw, 0x01);
+    CHECK(!off.frost_enabled);
+    CHECK_EQ(on.air_t10, 240);
+    CHECK_EQ(on.frost_temp, 16);
+    CHECK_EQ(off.frost_temp, 16);
 }
 
 /* ---- Request frames ----------------------------------------------------- */
@@ -511,6 +551,7 @@ int main(void)
     test_crc_residue();
     test_captured_frames();
     test_captured_prtn_decode();
+    test_captured_frost_flag();
     test_build_read_full();
     test_build_read_partial();
     test_build_read_rejects();

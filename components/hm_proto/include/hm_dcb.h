@@ -31,7 +31,7 @@ extern "C" {
 #define HM_IDX_MODEL          4
 #define HM_IDX_TEMP_FORMAT    5
 #define HM_IDX_SWITCH_DIFF    6
-#define HM_IDX_FROST_ENABLE   7
+#define HM_IDX_FROST_ENABLE   7   /* 0 = enabled on a real PRT-N; see hm_dcb_t */
 #define HM_IDX_CALIBRATION    8   /* 2 bytes */
 #define HM_IDX_OUTPUT_DELAY   10
 #define HM_IDX_ADDRESS        11
@@ -74,7 +74,12 @@ typedef struct {
     uint8_t  model;
     uint8_t  temp_format;      /* 0 = C, 1 = F */
     uint8_t  switch_diff;
-    uint8_t  frost_enable;
+    /* Frost protection. The V3.9 protocol doc says byte 7 is 1 = enabled,
+     * but a PRT-N on the bench (17 Nov 2026) mirrors its Feature 03 setting,
+     * where the stat's manual gives 00 = enabled: setting 00 read 00 and
+     * setting 01 read 01. Trust the stat, not the doc. */
+    uint8_t  frost_raw;        /* byte 7 as read */
+    bool     frost_enabled;    /* frost_raw == 0 */
     uint16_t calibration_raw;  /* units not yet confirmed on a real stat */
     uint8_t  output_delay;
     uint8_t  address;
