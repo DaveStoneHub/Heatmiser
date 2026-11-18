@@ -768,8 +768,44 @@ static void test_idle_wait(void)
     CHECK(strcmp(hm_wdone_str(HM_WDONE_OK), "confirmed") == 0);
 }
 
+static void test_counters_and_poll_now(void)
+{
+    hm_sched_t *s = new_sched(NULL);
+    sim_prt(1, 18);
+    sim_prt(2, 19);
+    hm_sched_add(s, 1);
+    hm_sched_add(s, 2);
+    run_for(s, 25000);
+    hm_stat_t st;
+    CHECK(hm_sched_get(s, 1, &st));
+    CHECK(st.cnt.polls >= 2);
+    hm_sched_clear_counters(s, 1);
+    CHECK(hm_sched_get(s, 1, &st));
+    CHECK_EQ(st.cnt.polls, 0);
+    CHECK(hm_sched_get(s, 2, &st));
+    CHECK(st.cnt.polls >= 2);
+    hm_sched_clear_counters(s, 0);
+    CHECK(hm_sched_get(s, 2, &st));
+    CHECK_EQ(st.cnt.polls, 0);
+
+    /* Poll now: the next slot reads that stat, well before its interval. */
+    hm_step_t did;
+    uint32_t wait;
+    do {
+        wait = hm_sched_step(s, &did);
+    } while (did != HM_STEP_IDLE);
+    CHECK(wait > 1000);
+    CHECK_EQ(hm_sched_poll_now(s, 2), 0);
+    CHECK_EQ(hm_sched_poll_now(s, 9), -1);
+    hm_sched_step(s, &did);
+    CHECK_EQ(did, HM_STEP_POLL);
+    CHECK(hm_sched_get(s, 2, &st));
+    CHECK_EQ(st.cnt.polls, 1);
+}
+
 void test_sched_all(void)
 {
+    test_counters_and_poll_now();
     test_round_robin();
     test_offline_backoff();
     test_read_retry_in_slot();

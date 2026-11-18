@@ -23,7 +23,7 @@ static void print_zones(void)
 {
     uint32_t list = zone_store_list();
     if (!list) {
-        printf("No zones. 'poll scan' or the Scan button on the setup screen finds them.\n");
+        printf("No zones. 'poll scan' or Zones and scan in Settings finds them.\n");
         return;
     }
     printf("addr name              model     link     room   set  mode  heat lock pending\n");
@@ -173,7 +173,9 @@ static int cmd_screen(int argc, char **argv)
 {
     const char *sub = argc > 1 ? argv[1] : "dash";
     int a = 0;
-    if (strcmp(sub, "zone") == 0 && (argc < 3 || parse_addr(argv[2], &a))) {
+    const bool per_zone = !strcmp(sub, "zone") || !strcmp(sub, "schedule") || !strcmp(sub, "timer") ||
+                          !strcmp(sub, "hotwater") || !strcmp(sub, "rename");
+    if (per_zone && (argc < 3 || parse_addr(argv[2], &a))) {
         return 1;
     }
     if (!lvgl_port_lock(1000)) {
@@ -181,8 +183,20 @@ static int cmd_screen(int argc, char **argv)
     }
     if (strcmp(sub, "zone") == 0) {
         ui_show_zone((uint8_t)a);
-    } else if (strcmp(sub, "setup") == 0) {
-        ui_show_setup();
+    } else if (strcmp(sub, "schedule") == 0 || strcmp(sub, "timer") == 0) {
+        ui_show_schedule((uint8_t)a, sub[0] == 't');
+    } else if (strcmp(sub, "hotwater") == 0) {
+        ui_show_hotwater((uint8_t)a);
+    } else if (strcmp(sub, "rename") == 0) {
+        ui_show_rename((uint8_t)a);
+    } else if (strcmp(sub, "settings") == 0) {
+        ui_show_settings();
+    } else if (strcmp(sub, "zones") == 0) {
+        ui_show_zones();
+    } else if (strcmp(sub, "diag") == 0) {
+        ui_show_diag();
+    } else if (strcmp(sub, "system") == 0) {
+        ui_show_system();
     } else {
         ui_show_dash();
     }
@@ -203,7 +217,9 @@ void ui_register_commands(void)
         { .command = "display", .help = "Display: status (default), soak on|off|now, timeout <s>, "
                                         "backlight on|off, restart",
           .hint = "[status|soak|timeout|backlight|restart]", .func = cmd_display },
-        { .command = "screen", .help = "Show a screen: dash, zone <addr>, setup", .hint = "[dash|zone|setup]",
+        { .command = "screen", .help = "Show a screen: dash, zone|schedule|timer|hotwater|rename <addr>, settings, "
+                                       "zones, diag, system",
+          .hint = "[dash|zone|schedule|timer|hotwater|rename|settings|zones|diag|system]",
           .func = cmd_screen },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) {

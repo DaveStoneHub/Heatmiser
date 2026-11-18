@@ -30,6 +30,34 @@ static struct {
 static hm_event_t s_done[DONE_RING];
 static size_t s_done_next;
 
+static portMUX_TYPE s_trace_mux = portMUX_INITIALIZER_UNLOCKED;
+static hm_trace_t s_trace[HM_TRACE_LEN];
+static size_t s_trace_next, s_trace_n;
+
+static void trace(bool tx, hm_xfer_t r, const uint8_t *b, size_t len, uint32_t timeout_ms)
+{
+    hm_trace_t e = {
+        .ms = (uint32_t)(esp_timer_get_time() / 1000),
+        .tx = tx,
+        .result = r,
+        .len = (uint16_t)len,
+        .n = (uint8_t)(len < HM_TRACE_BYTES ? len : HM_TRACE_BYTES),
+        .timeout_ms = (uint16_t)(timeout_ms > 65535 ? 65535 : timeout_ms),
+    };
+    if (b && e.n) {
+        memcpy(e.b, b, e.n);
+    } else {
+        e.n = 0;
+    }
+    portENTER_CRITICAL(&s_trace_mux);
+    s_trace[s_trace_next] = e;
+    s_trace_next = (s_trace_next + 1) % HM_TRACE_LEN;
+    if (s_trace_n < HM_TRACE_LEN) {
+        s_trace_n++;
+    }
+    portEXIT_CRITICAL(&s_trace_mux);
+}
+
 /* ---- scheduler I/O ------------------------------------------------------ */
 
 static hm_xfer_t io_xfer(void *ctx, const uint8_t *req, size_t req_len, uint8_t stat,
@@ -37,21 +65,30 @@ static hm_xfer_t io_xfer(void *ctx, const uint8_t *req, size_t req_len, uint8_t 
 {
     (void)ctx;
     static hm_txn_t t; /* only the bus task calls this */
+    trace(true, HM_XFER_OK, req, req_len, 0);
+    hm_xfer_t r;
     if (hm_bus_transact_timeout(req, req_len, stat, timeout_ms, &t) != ESP_OK) {
-        return HM_XFER_BAD;
+        r = HM_XFER_BAD;
+    } else {
+        switch (t.result) {
+        case HM_TXN_OK:
+            *reply = t.reply; /* data points into t.rx, valid until the next call */
+            r = HM_XFER_OK;
+            break;
+        case HM_TXN_TIMEOUT:
+        case HM_TXN_ECHO_ONLY:
+            r = HM_XFER_TIMEOUT;
+            break;
+        case HM_TXN_BAD_FRAME:
+            r = t.proto == HM_ERR_CRC ? HM_XFER_CRC : HM_XFER_BAD;
+            break;
+        default:
+            r = HM_XFER_BAD;
+            break;
+        }
     }
-    switch (t.result) {
-    case HM_TXN_OK:
-        *reply = t.reply; /* data points into t.rx, valid until the next call */
-        return HM_XFER_OK;
-    case HM_TXN_TIMEOUT:
-    case HM_TXN_ECHO_ONLY:
-        return HM_XFER_TIMEOUT;
-    case HM_TXN_BAD_FRAME:
-        return t.proto == HM_ERR_CRC ? HM_XFER_CRC : HM_XFER_BAD;
-    default:
-        return HM_XFER_BAD;
-    }
+    trace(false, r, t.rx, r == HM_XFER_TIMEOUT ? 0 : t.rx_len, timeout_ms);
+    return r;
 }
 
 static uint32_t io_now(void *ctx)
@@ -298,6 +335,30 @@ uint32_t hm_poller_list(void)
 size_t hm_poller_queue_len(void)
 {
     return hm_sched_queue_len(s_sched);
+}
+
+void hm_poller_clear_counters(uint8_t addr)
+{
+    hm_sched_clear_counters(s_sched, addr);
+}
+
+int hm_poller_poll_now(uint8_t addr)
+{
+    int rc = hm_sched_poll_now(s_sched, addr);
+    wake();
+    return rc;
+}
+
+size_t hm_poller_trace(hm_trace_t *out, size_t max)
+{
+    portENTER_CRITICAL(&s_trace_mux);
+    size_t n = s_trace_n < max ? s_trace_n : max;
+    size_t first = (s_trace_next + HM_TRACE_LEN - n) % HM_TRACE_LEN;
+    for (size_t i = 0; i < n; i++) {
+        out[i] = s_trace[(first + i) % HM_TRACE_LEN];
+    }
+    portEXIT_CRITICAL(&s_trace_mux);
+    return n;
 }
 
 esp_err_t hm_poller_listen(hm_poller_listener_t fn, void *arg)

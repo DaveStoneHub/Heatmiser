@@ -206,6 +206,31 @@ void hm_sched_set_interval(hm_sched_t *s, uint32_t ms)
     unlock(s);
 }
 
+void hm_sched_clear_counters(hm_sched_t *s, uint8_t addr)
+{
+    lock(s);
+    for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+        if (addr == 0 || i == addr - 1) {
+            memset(&s->stats[i].cnt, 0, sizeof s->stats[i].cnt);
+        }
+    }
+    unlock(s);
+}
+
+int hm_sched_poll_now(hm_sched_t *s, uint8_t addr)
+{
+    int rc = -1;
+    uint32_t t = now(s);
+    lock(s);
+    hm_stat_t *st = stat_of(s, addr);
+    if (st) {
+        st->next_poll_ms = t;
+        rc = 0;
+    }
+    unlock(s);
+    return rc;
+}
+
 bool hm_sched_get(hm_sched_t *s, uint8_t addr, hm_stat_t *out)
 {
     bool ok = false;

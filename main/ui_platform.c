@@ -6,9 +6,12 @@
 #include "display.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "net.h"
 #include "nvs.h"
+#include "nvs_flash.h"
 #include "ui.h"
 
 void ui_platform_sys_info(ui_sys_info_t *o)
@@ -64,4 +67,26 @@ uint32_t display_saved_blank_timeout(void)
         nvs_close(h);
     }
     return s;
+}
+
+const char *ui_platform_tz(void)
+{
+    return net_tz();
+}
+
+void ui_platform_set_tz(const char *posix)
+{
+    esp_err_t e = net_set_tz(posix);
+    if (e != ESP_OK) {
+        ESP_LOGW("ui", "timezone not saved: %s", esp_err_to_name(e));
+    }
+}
+
+void ui_platform_factory_reset(void)
+{
+    ESP_LOGW("ui", "factory reset from the screen");
+    board_backlight(false);
+    nvs_flash_deinit();
+    nvs_flash_erase();
+    esp_restart();
 }

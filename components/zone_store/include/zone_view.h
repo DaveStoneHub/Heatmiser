@@ -32,6 +32,8 @@ typedef struct {
 /* A write the user asked for that the stat has not confirmed yet. */
 typedef struct {
     bool     set_temp, mode, lock, hold, hw;
+    uint8_t  comfort;               /* bit per programme day being written */
+    uint8_t  hw_timer;              /* the same for hot water timers */
     uint8_t  set_temp_c;
     hm_mode_t mode_v;
     bool     lock_v;
@@ -61,10 +63,34 @@ typedef struct {
     uint8_t    error_code;          /* 0 = none; 0xE0 air, 0xE1 floor, 0xE2 remote sensor */
     bool       fahrenheit;
     bool       hw_on;               /* PRTHW: hot water is on now */
-    uint8_t    prog_mode;
+    uint8_t    prog_mode;           /* 0 = 5/2, 1 = 7 day */
+
+    /* The stat's programme: comfort levels and, on a PRTHW, hot water
+     * timers. One entry per programme day: 2 (weekday, weekend) in 5/2
+     * mode, 7 (Mon-Sun) in 7-day mode; 0 days if the DCB is too short.
+     * While a day is being written (pend.comfort / pend.hw_timer) it holds
+     * the values asked for. */
+    uint8_t     comfort_days;
+    hm_period_t comfort[7][4];
+    uint8_t     hw_timer_days;
+    hm_period_t hw_on_at[7][4];
+    hm_period_t hw_off_at[7][4];
+
+    /* The stat's own clock, as last read. wday 1-7 = Mon-Sun, 0 = none. */
+    uint8_t    clk_wday, clk_hour, clk_min;
+
+    /* Hot water as the bridge last set it (ZONE_HW_*), and boost time left. */
+    uint8_t    hw_mode;
+    uint16_t   boost_left_min;
 
     zone_pending_t pend;            /* filled by the zone store */
 } zone_view_t;
+
+/* Hot water modes the bridge can put a PRTHW in. */
+#define ZONE_HW_TIMER   0           /* following its timer */
+#define ZONE_HW_ON      1           /* forced on until changed */
+#define ZONE_HW_OFF     2           /* forced off until changed */
+#define ZONE_HW_BOOST   3           /* forced on, back to the timer when the boost ends */
 
 /* Fill the live part of *v from a stat's scheduler state. cfg and pend are
  * left alone. now_ms is the scheduler clock. */
@@ -89,12 +115,43 @@ const char *zone_error_str(uint8_t error_code);
 /* Which sensor the room temperature comes from: "Air", "Remote", "Floor". */
 const char *zone_sensor_str(uint8_t sensor_sel);
 
-/* Default name for a new zone: "Stat 3" or "Hot water stat 3". */
+/* Default name for a new zone: "Zone 3". */
 void zone_default_name(uint8_t addr, uint8_t model, char *buf, size_t cap);
 
 /* Copy a name, keeping printable ASCII only and at most ZONE_NAME_MAX bytes.
  * Leading and trailing spaces go. Returns false if nothing is left. */
 bool zone_clean_name(const char *in, char out[ZONE_NAME_MAX + 1]);
+
+/* ---- programme -------------------------------------------------------------
+ * Days count 0..days-1 as the stat's programme does: 5/2 has weekday (0) and
+ * weekend (1); 7-day has Mon (0) to Sun (6). A period with hour 24 is not
+ * used. */
+
+/* Programme day for a weekday (1-7 = Mon-Sun) given the number of days. */
+int zone_prog_day(uint8_t days, int wday);
+
+/* "Weekdays", "Weekend", "Mon"... */
+const char *zone_prog_day_name(uint8_t days, int day);
+
+/* Comfort level in force at minute m (0-1439) of a day: the last level that
+ * started at or before m; before the first, the day's last level (the
+ * evening level carries over midnight). 0 if the day has no levels. */
+uint8_t zone_comfort_at(const hm_period_t p[4], int m);
+
+/* Whether hot water is on at minute m given a day's on/off pairs. */
+bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m);
+
+/* The next on or off time after minute m on the same day, in minutes, or -1.
+ * *on_after says which. */
+int zone_hw_timer_next(const hm_period_t on[4], const hm_period_t off[4], int m, bool *on_after);
+
+/* True if the periods are in time order with the unused ones last, as the
+ * stat needs them. */
+bool zone_periods_ok(const hm_period_t p[4]);
+
+/* Sort periods into time order, unused ones last (the editors use this
+ * before a write). on/off pairs move together when off is not NULL. */
+void zone_periods_sort(hm_period_t p[4], hm_period_t *off);
 
 /* ---- saved zone list (NVS blob "zones/list") -----------------------------
  * Version 1: [version=1][count] then count entries of

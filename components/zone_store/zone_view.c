@@ -44,6 +44,14 @@ void zone_view_from_stat(const hm_stat_t *st, uint32_t now_ms, zone_view_t *v)
     v->fahrenheit = d.temp_format == 1;
     v->hw_on = d.has_hw && d.hw_on;
     v->prog_mode = d.prog_mode;
+    v->comfort_days = d.comfort_days;
+    memcpy(v->comfort, d.comfort, sizeof v->comfort);
+    v->hw_timer_days = d.hw_timer_days;
+    memcpy(v->hw_on_at, d.hw_on_at, sizeof v->hw_on_at);
+    memcpy(v->hw_off_at, d.hw_off_at, sizeof v->hw_off_at);
+    v->clk_wday = d.has_clock ? d.clk_wday : 0;
+    v->clk_hour = d.clk_hour;
+    v->clk_min = d.clk_min;
 }
 
 uint8_t zone_view_shown_set(const zone_view_t *v)
@@ -64,7 +72,7 @@ bool zone_view_shown_lock(const zone_view_t *v)
 bool zone_view_busy(const zone_view_t *v)
 {
     const zone_pending_t *p = &v->pend;
-    return p->set_temp || p->mode || p->lock || p->hold || p->hw;
+    return p->set_temp || p->mode || p->lock || p->hold || p->hw || p->comfort || p->hw_timer;
 }
 
 void zone_fmt_t10(int16_t t, char *buf, size_t cap)
@@ -135,7 +143,8 @@ const char *zone_sensor_str(uint8_t s)
 
 void zone_default_name(uint8_t addr, uint8_t model, char *buf, size_t cap)
 {
-    snprintf(buf, cap, model == HM_MODEL_PRTHW ? "HW stat %u" : "Stat %u", addr);
+    (void)model;
+    snprintf(buf, cap, "Zone %u", addr);
 }
 
 bool zone_clean_name(const char *in, char out[ZONE_NAME_MAX + 1])
@@ -155,6 +164,139 @@ bool zone_clean_name(const char *in, char out[ZONE_NAME_MAX + 1])
     }
     out[n] = 0;
     return n > 0;
+}
+
+/* ---- programme ---------------------------------------------------------- */
+
+static int minute_of(const hm_period_t *p)
+{
+    return p->hour < 24 ? p->hour * 60 + p->minute : -1;
+}
+
+int zone_prog_day(uint8_t days, int wday)
+{
+    if (wday < 1 || wday > 7) {
+        return 0;
+    }
+    if (days == 7) {
+        return wday - 1;
+    }
+    return wday >= 6 ? 1 : 0;
+}
+
+const char *zone_prog_day_name(uint8_t days, int day)
+{
+    static const char *const week[] = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+    if (days == 7) {
+        return day >= 0 && day < 7 ? week[day] : "?";
+    }
+    return day == 0 ? "Weekdays" : "Weekend";
+}
+
+uint8_t zone_comfort_at(const hm_period_t p[4], int m)
+{
+    int best = -1, last = -1;
+    for (int i = 0; i < 4; i++) {
+        int t = minute_of(&p[i]);
+        if (t < 0) {
+            continue;
+        }
+        if (last < 0 || t >= minute_of(&p[last])) {
+            last = i;
+        }
+        if (t <= m && (best < 0 || t >= minute_of(&p[best]))) {
+            best = i;
+        }
+    }
+    if (best >= 0) {
+        return p[best].temp;
+    }
+    return last >= 0 ? p[last].temp : 0;
+}
+
+bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m)
+{
+    for (int i = 0; i < 4; i++) {
+        int a = minute_of(&on[i]), b = minute_of(&off[i]);
+        if (a < 0) {
+            continue;
+        }
+        if (b < 0) {
+            b = 24 * 60; /* on to the end of the day */
+        }
+        if (m >= a && m < b) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int zone_hw_timer_next(const hm_period_t on[4], const hm_period_t off[4], int m, bool *on_after)
+{
+    int best = -1;
+    bool best_on = false;
+    for (int i = 0; i < 4; i++) {
+        int a = minute_of(&on[i]), b = minute_of(&off[i]);
+        if (a < 0) {
+            continue;
+        }
+        if (a > m && (best < 0 || a < best)) {
+            best = a;
+            best_on = true;
+        }
+        if (b > m && (best < 0 || b < best)) {
+            best = b;
+            best_on = false;
+        }
+    }
+    if (on_after) {
+        *on_after = best_on;
+    }
+    return best;
+}
+
+bool zone_periods_ok(const hm_period_t p[4])
+{
+    int prev = -1;
+    bool ended = false;
+    for (int i = 0; i < 4; i++) {
+        int t = minute_of(&p[i]);
+        if (t < 0) {
+            ended = true;
+            continue;
+        }
+        if (ended || t <= prev || p[i].minute > 59) {
+            return false;
+        }
+        prev = t;
+    }
+    return true;
+}
+
+void zone_periods_sort(hm_period_t p[4], hm_period_t *off)
+{
+    for (int i = 1; i < 4; i++) {
+        for (int j = i; j > 0; j--) {
+            int a = minute_of(&p[j - 1]), b = minute_of(&p[j]);
+            if (a < 0) {
+                a = 24 * 60 + j; /* unused ones last, in their order */
+            }
+            if (b < 0) {
+                b = 24 * 60 + j + 1;
+            }
+            if (a <= b) {
+                break;
+            }
+            hm_period_t t = p[j];
+            p[j] = p[j - 1];
+            p[j - 1] = t;
+            if (off) {
+                t = off[j];
+                off[j] = off[j - 1];
+                off[j - 1] = t;
+            }
+        }
+    }
 }
 
 size_t zone_list_encode(const zone_cfg_t *z, size_t n, uint8_t *out, size_t cap)

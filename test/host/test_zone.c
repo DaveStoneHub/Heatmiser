@@ -132,9 +132,9 @@ static void test_format(void)
     zone_fmt_t10(ZONE_T_ABSENT, b, sizeof b);
     CHECK(strcmp(b, "--.-") == 0);
     zone_default_name(3, HM_MODEL_PRTHW, b, sizeof b);
-    CHECK(strcmp(b, "HW stat 3") == 0);
+    CHECK(strcmp(b, "Zone 3") == 0);
     zone_default_name(12, HM_MODEL_PRT, b, sizeof b);
-    CHECK(strcmp(b, "Stat 12") == 0);
+    CHECK(strcmp(b, "Zone 12") == 0);
     CHECK(zone_error_str(0) == NULL);
     CHECK(strcmp(zone_error_str(0xE0), "Air sensor fault") == 0);
     CHECK(strcmp(zone_error_str(0xE1), "Floor sensor fault") == 0);
@@ -203,11 +203,80 @@ static void test_list_blob(void)
     n = zone_list_encode(in, 3, swap, sizeof swap);
     memset(swap + 2 + ZONE_LIST_ENTRY_SIZE + 4, 0, ZONE_NAME_MAX + 1);
     CHECK_EQ(zone_list_decode(swap, n, out, HM_SCHED_MAX_STATS), 3);
-    CHECK(strcmp(out[1].name, "HW stat 3") == 0);
+    CHECK(strcmp(out[1].name, "Zone 3") == 0);
+}
+
+static void test_programme(void)
+{
+    /* The 5/2 DCB carries both days of comfort levels. */
+    hm_stat_t st;
+    make_stat(&st, 0);
+    zone_view_t v;
+    memset(&v, 0, sizeof v);
+    zone_view_from_stat(&st, 0, &v);
+    CHECK_EQ(v.comfort_days, 2);
+    CHECK_EQ(v.hw_timer_days, 0);
+    CHECK(zone_periods_ok(v.comfort[0]));
+
+    CHECK_EQ(zone_prog_day(2, 1), 0);
+    CHECK_EQ(zone_prog_day(2, 5), 0);
+    CHECK_EQ(zone_prog_day(2, 6), 1);
+    CHECK_EQ(zone_prog_day(2, 7), 1);
+    CHECK_EQ(zone_prog_day(7, 3), 2);
+    CHECK_EQ(zone_prog_day(7, 0), 0);
+    CHECK(strcmp(zone_prog_day_name(2, 1), "Weekend") == 0);
+    CHECK(strcmp(zone_prog_day_name(7, 6), "Sun") == 0);
+
+    const hm_period_t c[4] = { { 6, 30, 21 }, { 8, 30, 17 }, { 17, 0, 21 }, { 22, 30, 16 } };
+    CHECK_EQ(zone_comfort_at(c, 0), 16);       /* last night's level */
+    CHECK_EQ(zone_comfort_at(c, 6 * 60 + 30), 21);
+    CHECK_EQ(zone_comfort_at(c, 12 * 60), 17);
+    CHECK_EQ(zone_comfort_at(c, 23 * 60), 16);
+    const hm_period_t two[4] = { { 7, 0, 20 }, { 21, 0, 15 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    CHECK(zone_periods_ok(two));
+    CHECK_EQ(zone_comfort_at(two, 60), 15);
+    CHECK_EQ(zone_comfort_at(two, 8 * 60), 20);
+    const hm_period_t none[4] = { { 24, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    CHECK_EQ(zone_comfort_at(none, 100), 0);
+    CHECK(zone_periods_ok(none));
+
+    /* Out of order, or a gap before a used period, is refused. */
+    hm_period_t bad[4] = { { 8, 0, 20 }, { 7, 0, 20 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    CHECK(!zone_periods_ok(bad));
+    zone_periods_sort(bad, NULL);
+    CHECK_EQ(bad[0].hour, 7);
+    CHECK(zone_periods_ok(bad));
+    hm_period_t gap[4] = { { 24, 0, 0 }, { 9, 0, 20 }, { 24, 0, 0 }, { 6, 15, 18 } };
+    CHECK(!zone_periods_ok(gap));
+    hm_period_t goff[4] = { { 24, 0, 0 }, { 10, 0, 0 }, { 24, 0, 0 }, { 7, 0, 0 } };
+    zone_periods_sort(gap, goff);
+    CHECK(zone_periods_ok(gap));
+    CHECK_EQ(gap[0].hour, 6);
+    CHECK_EQ(gap[0].minute, 15);
+    CHECK_EQ(goff[0].hour, 7);   /* off times move with their on times */
+    CHECK_EQ(gap[1].hour, 9);
+    CHECK_EQ(goff[1].hour, 10);
+    CHECK_EQ(gap[2].hour, 24);
+    CHECK_EQ(gap[3].hour, 24);
+
+    /* Hot water: on 06:00-08:00 and 17:00 to the end of the day. */
+    const hm_period_t on[4] = { { 6, 0, 0 }, { 17, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    const hm_period_t off[4] = { { 8, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    CHECK(!zone_hw_timer_on(on, off, 5 * 60 + 59));
+    CHECK(zone_hw_timer_on(on, off, 6 * 60));
+    CHECK(!zone_hw_timer_on(on, off, 8 * 60));
+    CHECK(zone_hw_timer_on(on, off, 23 * 60 + 59));
+    bool on_after = false;
+    CHECK_EQ(zone_hw_timer_next(on, off, 0, &on_after), 360);
+    CHECK(on_after);
+    CHECK_EQ(zone_hw_timer_next(on, off, 7 * 60, &on_after), 480);
+    CHECK(!on_after);
+    CHECK_EQ(zone_hw_timer_next(on, off, 18 * 60, &on_after), -1);
 }
 
 void test_zone_all(void)
 {
+    test_programme();
     test_view_from_stat();
     test_pending();
     test_format();
