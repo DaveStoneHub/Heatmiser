@@ -1,5 +1,7 @@
 build/
 build-host/
+build-preview/
+ui-shots/
 sdkconfig
 sdkconfig.old
 managed_components/

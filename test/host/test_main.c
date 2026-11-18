@@ -562,6 +562,7 @@ int main(void)
     test_print_smoke();
     test_write_all();
     test_sched_all();
+    test_zone_all();
 
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

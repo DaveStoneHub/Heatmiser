@@ -224,6 +224,20 @@ bool hm_poller_scanning(void)
     return hm_sched_scanning(s_sched);
 }
 
+bool hm_poller_scan_state(uint8_t *pass, uint8_t *next)
+{
+    io_lock(NULL);
+    bool on = s_sched->scanning;
+    if (pass) {
+        *pass = s_sched->scan_pass;
+    }
+    if (next) {
+        *next = s_sched->scan_next;
+    }
+    io_unlock(NULL);
+    return on;
+}
+
 void hm_poller_set_interval(uint32_t ms)
 {
     hm_sched_set_interval(s_sched, ms);
