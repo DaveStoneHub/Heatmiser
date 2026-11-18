@@ -7,16 +7,16 @@ milestones, presents them as Matter thermostats with a touchscreen controller.
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 2, protocol library and poller
+## Status: milestone 2, protocol library and poller (gate passed 18 Nov 2026)
 
 | Part | State |
 | --- | --- |
 | `hm_proto`: V3 frames, CRC, DCB decode, unique address map, write encoders and read-back checks (pure C) | Done, host tested |
 | `hm_sched`: write queue first, round-robin full-DCB poll, read-back confirmation, retries, offline back-off, scan (pure C) | Done, host tested against simulated stats |
 | `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time | Done, bench proven (milestone 1) |
-| `hm_poller`: the bus task running `hm_sched` on the board | Done, needs the bench |
-| Console: `poll`, `set`, `gate`, plus the milestone 1 commands | Done, needs the bench |
-| Gate: setpoint and mode writes confirmed on every stat | To do on the house bus, see [bench-milestone2.md](docs/bench-milestone2.md) |
+| `hm_poller`: the bus task running `hm_sched` on the board | Done, bench proven |
+| Console: `poll`, `set`, `gate`, plus the milestone 1 commands | Done, bench proven |
+| Gate: setpoint and mode writes confirmed on every stat | Passed 18 Nov 2026 on 11 of 12 stats (stat 2 faulty, set aside); see [bench-milestone2.md](docs/bench-milestone2.md#bench-results-18-nov-2026) |
 
 Milestone 1 (bus bring-up) passed its gate on 17 Nov 2026; see
 [Bench results](docs/bench-bringup.md#bench-results-17-nov-2026).
