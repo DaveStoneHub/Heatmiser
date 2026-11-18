@@ -65,7 +65,7 @@ It fetches LVGL 9.4.0 from GitHub (or pass `-DLVGL_DIR=` a local checkout).
 
 ## Firmware
 
-ESP-IDF 5.4 or later. LVGL, esp_lvgl_port and the GT911 driver come from the
+ESP-IDF 5.4 or later; CI builds with 5.4.1 and 6.1.1. LVGL, esp_lvgl_port and the GT911 driver come from the
 ESP component registry on the first build:
 
 ```
