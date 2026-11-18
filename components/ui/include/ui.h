@@ -1,13 +1,14 @@
 /*
- * The touchscreen: dashboard of zone tiles, zone detail, and the setup
- * screen (scan, rename, remove, system info). Pure LVGL 9 on top of
- * zone_store.h, so the same code runs on the board and in the desktop
- * preview (tools/ui_preview).
+ * The touchscreen in the Copper design: dashboard of zone tiles, zone detail,
+ * schedule, hot water, rename, settings, zones and scan, bus diagnostics and
+ * system. Pure LVGL 9 on top of zone_store.h, so the same code runs on the
+ * board and in the desktop preview (tools/ui_preview).
  *
  * Call everything here with the LVGL lock held (lvgl_port_lock on the board).
  */
 #pragma once
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "lvgl.h"
@@ -34,11 +35,28 @@ bool ui_soak_on(void);
 void ui_toast(const char *msg);
 
 /* Which screen is showing, for the console and tests. */
-typedef enum { UI_SCREEN_DASH = 0, UI_SCREEN_ZONE, UI_SCREEN_SETUP } ui_screen_t;
+typedef enum {
+    UI_SCREEN_DASH = 0,
+    UI_SCREEN_ZONE,
+    UI_SCREEN_SCHEDULE,
+    UI_SCREEN_HOTWATER,
+    UI_SCREEN_RENAME,
+    UI_SCREEN_SETTINGS,
+    UI_SCREEN_ZONES,
+    UI_SCREEN_DIAG,
+    UI_SCREEN_SYSTEM,
+    UI_SCREEN_COUNT
+} ui_screen_t;
 ui_screen_t ui_screen(void);
 void ui_show_dash(void);
 void ui_show_zone(uint8_t addr);
-void ui_show_setup(void);
+void ui_show_schedule(uint8_t addr, bool hot_water);
+void ui_show_hotwater(uint8_t addr);
+void ui_show_rename(uint8_t addr);
+void ui_show_settings(void);
+void ui_show_zones(void);
+void ui_show_diag(void);
+void ui_show_system(void);
 
 /* ---- provided by the platform (main/ui_platform.c, or the preview) ---------- */
 
@@ -61,8 +79,22 @@ void ui_platform_backlight(bool on);
 void ui_platform_soak(bool on);
 /* "Picture shifted" pressed during the soak: log it and restart the panel DMA. */
 void ui_platform_drift_seen(void);
-/* Screen timeout chosen on the setup screen: save it. */
+/* Screen timeout chosen on the settings screen: save it. */
 void ui_platform_save_blank_timeout(uint32_t seconds);
+
+/* Timezones offered on the settings screen. */
+typedef struct {
+    const char *name;            /* "Europe/London" */
+    const char *posix;           /* "GMT0BST,M3.5.0/1,M10.5.0" */
+} ui_tz_t;
+extern const ui_tz_t ui_timezones[];
+extern const size_t ui_timezone_count;
+/* The POSIX TZ string in use, and set (and save) a new one. */
+const char *ui_platform_tz(void);
+void ui_platform_set_tz(const char *posix);
+
+/* Factory reset confirmed on the screen: forget everything and restart. */
+void ui_platform_factory_reset(void);
 
 #ifdef __cplusplus
 }

@@ -10,6 +10,8 @@
 
 #define W 800
 #define H 480
+#define SCHED_FIELD_X 105
+#define SCHED_FIELD_Y 193
 
 static uint16_t s_fb[W * H];
 static uint32_t s_ms;
@@ -39,6 +41,10 @@ void ui_platform_backlight(bool on) { (void)on; }
 void ui_platform_soak(bool on) { s_soak = on; }
 void ui_platform_drift_seen(void) {}
 void ui_platform_save_blank_timeout(uint32_t s) { (void)s; }
+static const char *s_tz = "GMT0BST,M3.5.0/1,M10.5.0";
+const char *ui_platform_tz(void) { return s_tz; }
+void ui_platform_set_tz(const char *posix) { s_tz = posix; }
+void ui_platform_factory_reset(void) { printf("factory reset\n"); }
 
 /* ---- LVGL glue ---- */
 
@@ -132,13 +138,10 @@ int main(int argc, char **argv)
     shot("03-quick-adjust");
     run(6000);                     /* popup times out, change sent */
 
-    tap(700, 120);                 /* the hot water tile */
-    shot("03b-hot-water");
-    tap(20, 460);                  /* outside: closes */
 
     ui_show_zone(1);
     shot("04-zone-heating");
-    tap(728, 338);                 /* + */
+    tap(196, 404);                 /* + under the dial */
     shot("05-zone-setting");
     run(1000);
 
@@ -160,27 +163,49 @@ int main(int argc, char **argv)
     shot("11-dashboard-toast");
     run(5000);
 
-    ui_show_setup();
-    fake_set_scan(true, 1, 7, 2);
-    run(1200);
-    shot("12-setup-scanning");
-    fake_set_scan(false, 0, 0, 11);
-    run(1200);
-    tap(540, 234);                 /* Rename on the first row */
-    shot("13-rename");
-    tap(736, 446);                 /* keyboard OK */
-    ui_show_dash();
-    run(200);
-
-    ui_show_setup();
-    tap(560, 84);                  /* System tab */
+    ui_show_hotwater(3);
+    shot("12-hot-water");
+    fake_set_boost(3, 42);
     run(400);
-    shot("14-setup-system");
+    shot("13-hot-water-boost");
+    fake_set_boost(3, 0);
+
+    ui_show_schedule(1, false);
+    shot("14-schedule");
+    tap(SCHED_FIELD_X, SCHED_FIELD_Y);   /* level 1 time */
+    shot("15-schedule-edit");
+    ui_show_schedule(3, true);
+    shot("16-hot-water-timer");
+
+    ui_show_rename(5);
+    shot("17-rename");
+
+    ui_show_settings();
+    shot("18-settings");
+    tap(140, 110);                 /* Timezone */
+    shot("19-settings-timezone");
+    ui_show_settings();
+
+    ui_show_zones();
+    fake_set_scan(true, 1, 5, 4);
+    run(1200);
+    shot("20-zones-scanning");
+    fake_set_scan(false, 0, 0, 12);
+    run(1200);
+    shot("21-zones");
+
+    ui_show_diag();
+    run(1200);
+    shot("22-bus-diagnostics");
+
+    ui_show_system();
+    run(1200);
+    shot("23-system");
 
     ui_set_soak(true);
     ui_show_dash();
     run(1500);
-    shot("15-soak-pattern");
+    shot("24-soak-pattern");
     ui_set_soak(false);
     return 0;
 }

@@ -2,7 +2,8 @@
 
 Milestone 3 puts the stats on the screen. The board now boots into a
 dashboard of zone tiles driven by the poller, with a detail screen per zone
-and a setup screen to scan, name and remove stats. It remembers its zones
+hot water, schedule, rename and settings screens, and a zones screen to
+scan, name and remove stats. The look follows the Copper design doc. It remembers its zones
 and their names across reboots, joins Wi-Fi for the clock, and has a drift
 test pattern for the soak.
 
@@ -21,10 +22,18 @@ more in [screens/](screens/).
 
 | Screen | What it shows | What you can do |
 | --- | --- | --- |
-| Dashboard | A tile per stat: name, room temperature, setpoint, flame when heating, padlock, offline or fault badge; a hot water tile after the PRT/HW-N. 4 across, 3 down, scrolls past 12. Wi-Fi and clock in the header | Tap a tile to open the zone. Long-press for a quick +/- popup. Tap the hot water tile for Timer, On and Off. Gear icon for setup |
-| Zone | Room temperature and the sensor it comes from, floor temperature if fitted, heating now or not, hold time left, faults, last update | Setpoint dial and +/- buttons, Heat / Frost / Off, hold for 1 to 24 h, key lock, tap the name to rename |
-| Setup: Thermostats | Every saved stat with its address, model and state, and scan progress | Scan bus, Rename, Identify (blinks the stat's padlock), Remove |
-| Setup: System | Wi-Fi, clock, uptime, memory, frames drawn, firmware | Screen timeout, drift test pattern on or off |
+| Dashboard | A tile per stat: name, room temperature, setpoint, flame when heating, padlock, offline (dashed) or fault tile; a hot water tile after the PRT/HW-N. 4 across, 3 down, scrolls past 12. Wi-Fi and clock in the header | Tap a tile to open the zone or hot water. Long-press a zone for a quick +/- popup. Sliders icon for Settings |
+| Zone | Setpoint dial, room temperature, sensor, floor temperature if fitted, hold or holiday, faults, last update | Dial and +/- buttons, Heat / Frost / Off, hold Off / 1 h / 4 h / 24 h, key lock, Schedule; pencil to rename |
+| Hot water | On or off, why (timer, forced, boost), the next switch, today's timer as a strip | Resume timer, Force on, Force off, boost 30 / 60 / 120 min, Edit timer |
+| Schedule | The four comfort levels (or hot water on/off times) for Weekdays and Weekend, or each day in 7-day mode, and a 24 h profile | Tap a time or temperature to change it, or mark a level Not used; Copy to the other days |
+| Rename | The name with a 16 character counter | On-screen keyboard; the default-name key puts back "Zone N" |
+| Settings | Timezone, units, poll interval, master address, display timeout, PIN | Change timezone, poll interval and timeout; Zones and scan, Bus diagnostics, System; Sync clocks now, Holiday for all zones, Factory reset |
+| Zones and scan | Scan progress over addresses 1 to 32, every saved stat with model and state | Scan, tap a name to rename, Identify (blinks the stat's padlock), Remove |
+| Bus diagnostics | Polls, timeouts, CRC errors and last seen per stat, the last bus frames | Clear counters, Single read |
+| System | Wi-Fi, clock, uptime, memory, frames drawn, firmware | Drift test pattern on or off |
+
+Units are fixed at °C, the master address is shown only, and PIN and Matter
+say they come later.
 
 Setpoint taps wait 0.7 s after the last tap before going on the bus, so five
 taps make one write. Until the stat confirms a change the screen shows
@@ -73,7 +82,8 @@ moment after the first frame is drawn.
 ## 1. Find the stats
 
 The dashboard says "No thermostats yet". Tap **Scan for thermostats** (or the
-gear icon, then **Scan bus**). The setup screen shows progress over addresses
+sliders icon, **Zones and scan**, then **Scan the bus**). The zones screen
+shows progress over addresses
 1 to 32 and should find 11 stats in about 15 seconds; stat 2 will not answer,
 as before. Every stat found is saved and starts polling at once.
 
@@ -88,8 +98,8 @@ It shows a grey **Offline** tile and costs one timeout a minute on the bus.
 
 ## 2. Name the zones
 
-On the setup screen, tap **Rename** on a row and type the name you noted from
-the Touchpad (16 characters at most), then the tick key. Or, quicker for
+On **Zones and scan**, tap a zone's name and type the name you noted from
+the Touchpad (16 characters at most), then **Save**. Or, quicker for
 eleven of them, use the console:
 
 ```
@@ -118,15 +128,22 @@ Pick a stat you can see:
 3. Drag the dial. Same result, one write when you let go.
 4. Tap **Frost**, then **Heat**, then **Off**, then back. The stat should
    follow each one; the dial greys out in Frost and Off.
-5. **Hold...**, then **Hold 1 h**. The left side shows "Held for 1 h 00 min".
-   Then **No hold**.
-6. Tap **Unlocked** to lock the keys, check the padlock on the stat, then
-   unlock.
+5. Under **HOLD**, tap **1 h**. The info card shows the hold time left.
+   Then **Off**.
+6. Tap **Key lock** to lock the keys, check the padlock on the stat, then
+   tap it again to unlock.
 7. Back on the dashboard, long-press a tile. The popup's +/- change the
    setpoint the same way; it closes after 5 seconds or a tap outside.
-8. Tap the hot water tile. **On** should turn the hot water on at the
-   PRT/HW-N (address 3), **Off** off, and **Timer** hands it back to its
-   programme.
+8. Tap the hot water tile. **Force on** should turn the hot water on at the
+   PRT/HW-N (address 3), **Force off** off, and **Resume timer** hands it
+   back to its programme. **30 min** boosts it; the header counts down and
+   the stat goes back to its timer when the boost ends (or at once if you
+   tap the boost again).
+9. Tap **Schedule** on a zone. The levels should match the stat's own
+   programme. Change one time by 10 minutes, tap **Set**, and check the stat
+   shows it; then put it back.
+10. In **Settings**, **Bus diagnostics** should show every stat's poll count
+    rising and the frames going by.
 
 Pull the bus pair from the board for a minute to see the tiles go to
 **Offline** after three missed polls (about 30 s), then plug it back in.
@@ -154,8 +171,8 @@ name, and the tiles fill in as each stat is read (about 10 s).
 ## 6. The 24 hour soak (the gate)
 
 Set the board up where it will run, on its 5 V supply, with the bus connected
-and Wi-Fi joined. Then turn on the drift test pattern: gear, **System**,
-**Drift test pattern** on. (Or `display soak on`.)
+and Wi-Fi joined. Then turn on the drift test pattern: sliders icon,
+**System**, **Drift test pattern**. (Or `display soak on`.)
 
 The pattern draws a white 1 px frame on the outermost pixels with a red frame
 2 px inside it, a coloured square in each corner, an orange bar sliding along
@@ -193,7 +210,7 @@ The gate passes when, after 24 hours:
   `ping_ok`;
 - `int_min`, the lowest free internal RAM, has stopped falling.
 
-Turn the pattern off afterwards (switch, or `display soak off`), which prints
+Turn the pattern off afterwards (the same button, or `display soak off`), which prints
 a final `DSOAK end` line.
 
 ## What to send back
@@ -217,7 +234,7 @@ a final `DSOAK end` line.
 | `display soak on/off/now` | Drift test pattern and load; `now` prints a DSOAK line |
 | `display timeout <s>` | Blank after this many seconds idle, 0 = never (saved) |
 | `display backlight on/off`, `display restart` | Backlight; restart the panel DMA |
-| `screen dash`, `screen zone <addr>`, `screen setup` | Show a screen without touching it |
+| `screen dash`, `screen zone/schedule/timer/hotwater/rename <addr>`, `screen settings/zones/diag/system` | Show a screen without touching it |
 
 `poll`, `set`, `gate` and the milestone 1 commands still work. A `poll scan`
 from the console adds what it finds to the saved zones too; `poll add` and

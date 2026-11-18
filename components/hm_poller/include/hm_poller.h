@@ -42,6 +42,26 @@ bool     hm_poller_get(uint8_t addr, hm_stat_t *out);
 uint32_t hm_poller_list(void);
 size_t   hm_poller_queue_len(void);
 
+/* Zero one stat's bus counters (0 = all), or poll one at the next slot. */
+void hm_poller_clear_counters(uint8_t addr);
+int  hm_poller_poll_now(uint8_t addr);
+
+/* The last bus frames, for the diagnostics screen: each request (tx) and
+ * what came back. Bytes beyond HM_TRACE_BYTES are left out. */
+#define HM_TRACE_BYTES 10
+#define HM_TRACE_LEN   12
+typedef struct {
+    uint32_t  ms;
+    bool      tx;
+    hm_xfer_t result;        /* rx only */
+    uint16_t  len;           /* whole frame */
+    uint8_t   n;             /* bytes in b */
+    uint8_t   b[HM_TRACE_BYTES];
+    uint16_t  timeout_ms;    /* rx timeouts */
+} hm_trace_t;
+/* Copies up to max entries, oldest first. */
+size_t hm_poller_trace(hm_trace_t *out, size_t max);
+
 /* Listeners run on the bus task: keep them short and never block. */
 typedef void (*hm_poller_listener_t)(const hm_event_t *ev, void *arg);
 esp_err_t hm_poller_listen(hm_poller_listener_t fn, void *arg);

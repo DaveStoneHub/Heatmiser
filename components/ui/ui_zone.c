@@ -1,34 +1,23 @@
-/* Zone detail: the room temperature, the setpoint dial, mode, hold and key
- * lock for one stat. */
+/* Zone detail: the setpoint dial, mode, hold, key lock and the stat's details
+ * for one zone, with ways to its schedule and to rename it. */
 #include <stdio.h>
 #include <string.h>
 
 #include "ui_internal.h"
 
-static lv_obj_t *s_scr, *s_title, *s_info;
-static lv_obj_t *s_room, *s_sensor, *s_state_icon, *s_state, *s_hold, *s_fault, *s_age;
-static lv_obj_t *s_arc, *s_set, *s_set_cap, *s_minus, *s_plus;
-static lv_obj_t *s_mode, *s_hold_dd, *s_lock, *s_lock_lbl;
-static uint8_t s_addr;
+#define DIAL      300
+#define ARC_W     16
+#define LEFT_W    400
+
+static lv_obj_t *s_scr, *s_title, *s_state;
+static lv_obj_t *s_left, *s_arc, *s_set, *s_set_deg, *s_set_cap, *s_now, *s_minus, *s_plus;
+static lv_obj_t *s_mode[3], *s_hold[4];
+static lv_obj_t *s_info_val[4], *s_info_key[4];
+static lv_obj_t *s_lock, *s_sched;
 static bool s_updating; /* setting widgets from the store, not from a touch */
 
-static const char *const s_mode_map[] = { "Heat", "Frost", "Off", "" };
-static const unsigned s_hold_min[] = { 0, 60, 120, 240, 480, 1440 };
-
-uint8_t zone_scr_addr(void)
-{
-    return s_addr;
-}
-
-static lv_obj_t *label(lv_obj_t *p, const lv_font_t *f, lv_color_t c, int x, int y)
-{
-    lv_obj_t *l = lv_label_create(p);
-    lv_obj_set_style_text_font(l, f, 0);
-    lv_obj_set_style_text_color(l, c, 0);
-    lv_label_set_text(l, "");
-    lv_obj_set_pos(l, x, y);
-    return l;
-}
+static const hm_mode_t s_modes[3] = { HM_MODE_HEAT, HM_MODE_FROST, HM_MODE_OFF };
+static const unsigned s_hold_min[4] = { 0, 60, 240, 1440 };
 
 static void back_event(lv_event_t *e)
 {
@@ -39,7 +28,18 @@ static void back_event(lv_event_t *e)
 static void rename_event(lv_event_t *e)
 {
     (void)e;
-    ui_rename_dialog(s_addr);
+    ui_show_rename(ui_cur_addr);
+}
+
+static void sched_event(lv_event_t *e)
+{
+    (void)e;
+    ui_show_schedule(ui_cur_addr, false);
+}
+
+static void refresh_me(void)
+{
+    ui_refresh(1u << (ui_cur_addr - 1));
 }
 
 static void arc_event(lv_event_t *e)
@@ -48,82 +48,53 @@ static void arc_event(lv_event_t *e)
         return;
     }
     int v = lv_arc_get_value(lv_event_get_target(e));
-    ui_dial_set(s_addr, v);
-    lv_label_set_text_fmt(s_set, "%d" DEG, v);
+    ui_dial_set(ui_cur_addr, v);
+    refresh_me();
 }
 
 static void step_event(lv_event_t *e)
 {
-    int d = (int)(intptr_t)lv_event_get_user_data(e);
-    ui_dial_nudge(s_addr, d);
-    zone_scr_refresh(1u << (s_addr - 1));
+    ui_dial_nudge(ui_cur_addr, (int)(intptr_t)lv_event_get_user_data(e));
+    refresh_me();
 }
 
 static void mode_event(lv_event_t *e)
 {
-    if (s_updating) {
-        return;
-    }
-    uint32_t b = lv_buttonmatrix_get_selected_button(lv_event_get_target(e));
-    static const hm_mode_t modes[] = { HM_MODE_HEAT, HM_MODE_FROST, HM_MODE_OFF };
-    if (b < 3) {
-        ui_dial_flush();
-        ui_report(zone_store_set_mode(s_addr, modes[b]), "Mode");
-        zone_scr_refresh(1u << (s_addr - 1));
-    }
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    ui_dial_flush();
+    ui_report(zone_store_set_mode(ui_cur_addr, s_modes[i]), "Mode");
+    refresh_me();
 }
 
 static void hold_event(lv_event_t *e)
 {
-    if (s_updating) {
-        return;
-    }
-    uint32_t i = lv_dropdown_get_selected(lv_event_get_target(e));
-    if (i < sizeof s_hold_min / sizeof s_hold_min[0]) {
-        ui_dial_flush();
-        ui_report(zone_store_set_hold(s_addr, s_hold_min[i]), "Hold");
-    }
-    zone_scr_refresh(1u << (s_addr - 1));
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    ui_dial_flush();
+    ui_report(zone_store_set_hold(ui_cur_addr, s_hold_min[i]), "Hold");
+    refresh_me();
 }
 
 static void lock_event(lv_event_t *e)
 {
     (void)e;
     zone_view_t v;
-    if (ui_zone(s_addr, &v)) {
-        ui_report(zone_store_set_lock(s_addr, !zone_view_shown_lock(&v)), "Key lock");
-        zone_scr_refresh(1u << (s_addr - 1));
+    if (ui_zone(ui_cur_addr, &v)) {
+        ui_report(zone_store_set_lock(ui_cur_addr, !zone_view_shown_lock(&v)), "Key lock");
+        refresh_me();
     }
 }
 
-static lv_obj_t *step_button(lv_obj_t *p, const char *sym, int d)
+static void info_set(int row, const char *key, const char *val, lv_color_t c)
 {
-    lv_obj_t *b = lv_button_create(p);
-    lv_obj_set_size(b, 84, 84);
-    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(b, C_PANEL_HI, 0);
-    lv_obj_set_style_shadow_width(b, 0, 0);
-    lv_obj_t *l = lv_label_create(b);
-    lv_label_set_text(l, sym);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_40, 0);
-    lv_obj_center(l);
-    lv_obj_add_event_cb(b, step_event, LV_EVENT_CLICKED, (void *)(intptr_t)d);
-    return b;
+    lv_label_set_text(s_info_key[row], key ? key : "");
+    lv_label_set_text(s_info_val[row], val ? val : "");
+    lv_obj_set_style_text_color(s_info_val[row], c, 0);
 }
 
-static void enable(lv_obj_t *o, bool on)
-{
-    if (on) {
-        lv_obj_remove_state(o, LV_STATE_DISABLED);
-    } else {
-        lv_obj_add_state(o, LV_STATE_DISABLED);
-    }
-}
-
-void zone_scr_refresh(uint32_t dirty)
+static void zone_refresh(uint32_t dirty)
 {
     zone_view_t v;
-    if (!s_scr || !s_addr || !(dirty & (1u << (s_addr - 1))) || !ui_zone(s_addr, &v)) {
+    if (!ui_cur_addr || !(dirty & (1u << (ui_cur_addr - 1))) || !ui_zone(ui_cur_addr, &v)) {
         return;
     }
     char buf[64];
@@ -131,225 +102,263 @@ void zone_scr_refresh(uint32_t dirty)
     const bool offline = v.link == HM_LINK_OFFLINE;
     const bool live = v.have && !offline;
     const hm_mode_t mode = zone_view_shown_mode(&v);
+    const bool heating = live && v.heating && mode != HM_MODE_OFF;
+    const char *err = live ? zone_error_str(v.error_code) : NULL;
 
-    lv_label_set_text_fmt(s_title, "%s  " LV_SYMBOL_EDIT, v.cfg.name);
-    lv_label_set_text_fmt(s_info, "Stat %u  %s", v.cfg.addr,
-                          v.have ? (v.is_prthw ? "PRT/HW-N" : "PRT-N") : "");
+    lv_label_set_text(s_title, v.cfg.name);
 
-    ui_fmt_temp(buf, sizeof buf, v.have ? v.room_t10 : ZONE_T_ABSENT);
-    lv_label_set_text(s_room, buf);
-    lv_obj_set_style_text_color(s_room, live ? C_TEXT : C_FAINT, 0);
-
-    if (v.have) {
-        char fl[16];
-        ui_fmt_temp(fl, sizeof fl, v.floor_t10);
-        if (v.floor_t10 != ZONE_T_ABSENT && v.sensor_sel != 2) {
-            lv_label_set_text_fmt(s_sensor, "%s sensor, floor %s", zone_sensor_str(v.sensor_sel), fl);
-        } else {
-            lv_label_set_text_fmt(s_sensor, "%s sensor", zone_sensor_str(v.sensor_sel));
-        }
-    } else {
-        lv_label_set_text(s_sensor, "");
-    }
-
-    const char *icon = "";
-    lv_color_t ic = C_MUTED;
-    if (!v.have) {
-        lv_label_set_text(s_state, offline ? "" : "Waiting for the stat...");
+    /* Header state */
+    lv_color_t sc = C_MUTED;
+    if (offline) {
+        lv_label_set_text(s_state, HM_ICON_WIFI_OFF "  Offline");
+        sc = C_FAULT;
+    } else if (!v.have) {
+        lv_label_set_text(s_state, "Connecting" ELLIPSIS);
+    } else if (err) {
+        lv_label_set_text_fmt(s_state, HM_ICON_WARN "  %s", err);
+        sc = C_FAULT;
     } else if (mode == HM_MODE_OFF) {
-        icon = HM_ICON_POWER;
-        lv_label_set_text(s_state, "Switched off");
+        lv_label_set_text(s_state, HM_ICON_POWER "  Switched off");
+    } else if (heating) {
+        lv_label_set_text(s_state, HM_ICON_FLAME "  Heating now");
+        sc = C_COPPER;
     } else if (mode == HM_MODE_FROST) {
-        icon = HM_ICON_SNOW;
-        ic = C_FROST;
-        lv_label_set_text_fmt(s_state, "Frost protection at %u" DEG "%s", v.frost_temp,
-                              v.heating ? ", heating" : "");
-    } else if (v.heating) {
-        icon = HM_ICON_FIRE;
-        ic = C_HEAT;
-        lv_label_set_text(s_state, "Heating now");
+        lv_label_set_text(s_state, HM_ICON_SNOW "  Frost protection");
     } else {
-        icon = HM_ICON_THERMO;
         lv_label_set_text(s_state, "Not heating");
     }
-    lv_label_set_text(s_state_icon, icon);
-    lv_obj_set_style_text_color(s_state_icon, ic, 0);
-
-    if (v.have && v.holiday_h) {
-        lv_label_set_text_fmt(s_hold, HM_ICON_CLOCK "  Holiday, %u h left", v.holiday_h);
-    } else if (v.have && (v.hold_min || v.pend.hold)) {
-        unsigned m = v.pend.hold ? v.pend.hold_min : v.hold_min;
-        if (m) {
-            lv_label_set_text_fmt(s_hold, HM_ICON_CLOCK "  Held for %u h %02u min%s", m / 60, m % 60,
-                                  v.pend.hold ? "..." : "");
-        } else {
-            lv_label_set_text(s_hold, HM_ICON_CLOCK "  Ending hold...");
-        }
-    } else {
-        lv_label_set_text(s_hold, "");
-    }
-
-    const char *err = v.have ? zone_error_str(v.error_code) : NULL;
-    if (offline) {
-        lv_label_set_text(s_fault, HM_ICON_WARN "  Offline: check its wiring and address");
-    } else if (err) {
-        lv_label_set_text_fmt(s_fault, HM_ICON_WARN "  %s (E%X)", err, v.error_code & 0x0F);
-    } else {
-        lv_label_set_text(s_fault, "");
-    }
+    lv_obj_set_style_text_color(s_state, sc, 0);
 
     /* Dial */
+    lv_obj_set_style_bg_color(s_left, heating ? C_HEAT_BG : C_TILE, 0);
+    lv_obj_set_style_border_color(s_left, heating ? C_HEAT_BORDER : C_BORDER, 0);
     int dial;
-    bool frost = mode == HM_MODE_FROST;
-    int shown = ui_dial_value(s_addr, &dial) ? dial : frost ? v.frost_temp : zone_view_shown_set(&v);
-    bool dial_on = live && mode == HM_MODE_HEAT;
-    enable(s_arc, dial_on);
-    enable(s_minus, dial_on);
-    enable(s_plus, dial_on);
-    if (!v.have) {
-        lv_arc_set_value(s_arc, HM_SET_TEMP_MIN);
-    } else if (!frost && shown >= HM_SET_TEMP_MIN && shown <= HM_SET_TEMP_MAX) {
+    const bool frost = mode == HM_MODE_FROST;
+    const bool pending = ui_dial_value(ui_cur_addr, &dial);
+    int shown = pending ? dial : frost ? v.frost_temp : zone_view_shown_set(&v);
+    const bool dial_on = live && mode == HM_MODE_HEAT;
+    ui_enable(s_arc, dial_on);
+    ui_enable(s_minus, dial_on);
+    ui_enable(s_plus, dial_on);
+    if (v.have && shown >= HM_SET_TEMP_MIN && shown <= HM_SET_TEMP_MAX) {
         lv_arc_set_value(s_arc, shown);
+    } else if (v.have && frost) {
+        lv_arc_set_value(s_arc, HM_SET_TEMP_MIN);
     }
-    if (v.have) {
-        lv_label_set_text_fmt(s_set, "%d" DEG, shown);
+    if (v.have && mode != HM_MODE_OFF) {
+        lv_label_set_text_fmt(s_set, "%d", shown);
+        lv_label_set_text(s_set_deg, DEG);
     } else {
         lv_label_set_text(s_set, "--");
+        lv_label_set_text(s_set_deg, "");
     }
-    lv_obj_set_style_text_color(s_set, dial_on ? C_TEXT : C_FAINT, 0);
-    lv_label_set_text(s_set_cap, frost ? "Frost" : (v.pend.set_temp || ui_dial_value(s_addr, &dial)) ? "Setting..." : "Target");
+    lv_obj_update_layout(s_set);
+    lv_obj_align_to(s_set_deg, s_set, LV_ALIGN_OUT_RIGHT_TOP, 0, 8);
+    lv_color_t vc = dial_on ? C_COPPER : C_MUTED;
+    lv_obj_set_style_text_color(s_set, vc, 0);
+    lv_obj_set_style_text_color(s_set_deg, vc, 0);
+    lv_label_set_text(s_set_cap, frost ? "FROST" : mode == HM_MODE_OFF ? "OFF"
+                                 : (v.pend.set_temp || pending) ? "SETTING" ELLIPSIS : "SET");
+    if (v.have && v.room_t10 != ZONE_T_ABSENT) {
+        char t[16];
+        ui_fmt_temp(t, sizeof t, v.room_t10);
+        lv_label_set_text_fmt(s_now, "Now %s", t);
+    } else {
+        lv_label_set_text(s_now, v.have ? "No reading" : "");
+    }
 
-    /* Mode, hold, lock */
-    enable(s_mode, live);
-    enable(s_hold_dd, live && mode == HM_MODE_HEAT);
-    enable(s_lock, live);
-    lv_buttonmatrix_clear_button_ctrl_all(s_mode, LV_BUTTONMATRIX_CTRL_CHECKED);
-    if (v.have) {
-        lv_buttonmatrix_set_button_ctrl(s_mode, mode == HM_MODE_HEAT ? 0 : mode == HM_MODE_FROST ? 1 : 2,
-                                        LV_BUTTONMATRIX_CTRL_CHECKED);
+    /* Mode and hold */
+    for (int i = 0; i < 3; i++) {
+        ui_enable(s_mode[i], live);
+        ui_btn_kind(s_mode[i], v.have && mode == s_modes[i] ? UI_BTN_SOLID : UI_BTN_PLAIN);
     }
+    unsigned hold = v.pend.hold ? v.pend.hold_min : v.hold_min;
+    int sel = 0;
+    if (hold) {
+        sel = 3;
+        for (int i = 3; i >= 1; i--) {
+            if (hold <= s_hold_min[i]) {
+                sel = i;
+            }
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        ui_enable(s_hold[i], live && mode == HM_MODE_HEAT);
+        ui_btn_kind(s_hold[i], v.have && i == sel ? UI_BTN_TINT : UI_BTN_PLAIN);
+    }
+
+    /* Details */
+    if (!v.have) {
+        info_set(0, "Stat", offline ? "Not answering" : "Waiting for a reading", offline ? C_FAULT : C_TEXT);
+        snprintf(buf, sizeof buf, "%u", v.cfg.addr);
+        info_set(1, "Address", buf, C_TEXT);
+        info_set(2, NULL, NULL, C_TEXT);
+        info_set(3, NULL, NULL, C_TEXT);
+    } else {
+        snprintf(buf, sizeof buf, "%s, %s", zone_sensor_str(v.sensor_sel), v.is_prthw ? "PRT/HW-N" : "PRT-N");
+        info_set(0, "Sensor", buf, C_TEXT);
+        if (v.floor_t10 != ZONE_T_ABSENT) {
+            ui_fmt_temp(buf, sizeof buf, v.floor_t10);
+        } else {
+            snprintf(buf, sizeof buf, "Not fitted");
+        }
+        info_set(1, "Floor", buf, C_TEXT);
+        if (err) {
+            snprintf(buf, sizeof buf, "%s (E%X)", err, v.error_code & 0x0F);
+            info_set(2, "Fault", buf, C_FAULT);
+        } else if (v.holiday_h) {
+            snprintf(buf, sizeof buf, "%u h left", v.holiday_h);
+            info_set(2, "Holiday", buf, C_COPPER);
+        } else if (hold) {
+            snprintf(buf, sizeof buf, "%u h %02u min left%s", hold / 60, hold % 60, v.pend.hold ? ELLIPSIS : "");
+            info_set(2, "Hold", buf, C_COPPER);
+        } else if (mode == HM_MODE_FROST) {
+            snprintf(buf, sizeof buf, "%u" DEG "%s", v.frost_temp, v.frost_enabled ? "" : ", protection off");
+            info_set(2, "Frost", buf, C_TEXT);
+        } else {
+            snprintf(buf, sizeof buf, "%u" DEG ", %s", v.frost_temp, v.frost_enabled ? "on" : "off");
+            info_set(2, "Frost protection", buf, C_TEXT);
+        }
+        info_set(3, offline ? "Last heard" : "Last update", "", C_TEXT);
+    }
+
+    /* Lock and schedule */
     const bool locked = v.have && zone_view_shown_lock(&v);
-    lv_label_set_text(s_lock_lbl, locked ? HM_ICON_LOCK "  Locked" : HM_ICON_LOCK "  Unlocked");
-    lv_obj_set_style_bg_color(s_lock, locked ? lv_color_hex(0x3A4756) : C_PANEL_HI, 0);
+    ui_enable(s_lock, live);
+    lv_label_set_text(ui_btn_label(s_lock), locked ? HM_ICON_LOCK "  Keys locked" : HM_ICON_UNLOCK "  Key lock");
+    ui_btn_kind(s_lock, locked ? UI_BTN_TINT : UI_BTN_PLAIN);
+    ui_enable(s_sched, v.have && v.comfort_days > 0);
     s_updating = false;
-    zone_scr_tick();
 }
 
-void zone_scr_tick(void)
+static void zone_tick(void)
 {
     zone_view_t v;
-    if (!s_addr || !ui_zone(s_addr, &v)) {
+    if (!ui_cur_addr || !ui_zone(ui_cur_addr, &v) || !v.have) {
         return;
     }
     char age[24];
-    if (!v.have) {
-        lv_label_set_text(s_age, "");
-        return;
-    }
     ui_fmt_age(age, sizeof age, v.age_s);
-    lv_label_set_text_fmt(s_age, "%s %s", v.link == HM_LINK_OFFLINE ? "Last heard" : "Updated", age);
+    lv_label_set_text(s_info_val[3], age);
 }
 
 void zone_scr_open(uint8_t addr)
 {
-    s_addr = addr;
-    lv_dropdown_close(s_hold_dd);
-    zone_scr_refresh(1u << (addr - 1));
+    ui_cur_addr = addr;
 }
 
-lv_obj_t *zone_scr_create(void)
+static lv_obj_t *wide_btn(lv_obj_t *parent, const char *text, lv_event_cb_t cb, void *user)
 {
-    s_scr = lv_obj_create(NULL);
-    ui_style_screen(s_scr);
-    lv_obj_t *h = ui_header(s_scr, "", true, back_event);
-    s_title = lv_obj_get_user_data(h);
-    lv_obj_add_flag(s_title, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_ext_click_area(s_title, 16);
-    lv_obj_add_event_cb(s_title, rename_event, LV_EVENT_CLICKED, NULL);
-    s_info = lv_label_create(h);
-    lv_obj_set_style_text_font(s_info, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(s_info, C_MUTED, 0);
-    lv_obj_align(s_info, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_t *b = ui_btn(parent, text, cb, user);
+    lv_obj_set_flex_grow(b, 1);
+    lv_obj_set_style_pad_hor(b, 4, 0);
+    return b;
+}
 
-    /* Left: the room */
-    lv_label_set_text(label(s_scr, &lv_font_montserrat_20, C_MUTED, 28, 76), "Room");
-    s_room = label(s_scr, &hm_num_96, C_TEXT, 20, 100);
-    s_sensor = label(s_scr, &lv_font_montserrat_16, C_MUTED, 28, 206);
-    s_state_icon = label(s_scr, &hm_icons_20, C_MUTED, 28, 242);
-    s_state = label(s_scr, &lv_font_montserrat_20, C_TEXT, 62, 240);
-    s_hold = label(s_scr, &ui_font20i, C_TEXT, 28, 276);
-    s_fault = label(s_scr, &ui_font20i, C_BAD, 28, 312);
-    s_age = label(s_scr, &lv_font_montserrat_16, C_FAINT, 28, 352);
+static lv_obj_t *zone_create(void)
+{
+    s_scr = ui_screen_new();
+    ui_hdr_t h = ui_header(s_scr, "", back_event);
+    s_title = h.title;
+    lv_obj_t *left = lv_obj_get_user_data(h.bar);
+    ui_icon_btn(left, HM_ICON_PENCIL, rename_event, NULL);
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_max_width(s_title, 330, 0);
+    s_state = ui_label(h.right, F_LABEL, C_MUTED, "");
 
-    /* Right: the setpoint dial */
-    s_arc = lv_arc_create(s_scr);
-    lv_obj_set_size(s_arc, 250, 250);
-    lv_obj_set_pos(s_arc, 480, 66);
+    lv_obj_t *body = ui_body(s_scr);
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(body, GAP, 0);
+
+    /* Left: the dial */
+    s_left = ui_panel(body);
+    lv_obj_set_size(s_left, LEFT_W, LV_PCT(100));
+    s_arc = lv_arc_create(s_left);
+    lv_obj_set_size(s_arc, DIAL, DIAL);
+    lv_obj_align(s_arc, LV_ALIGN_TOP_MID, 0, 0);
     lv_arc_set_rotation(s_arc, 135);
     lv_arc_set_bg_angles(s_arc, 0, 270);
     lv_arc_set_range(s_arc, HM_SET_TEMP_MIN, HM_SET_TEMP_MAX);
-    lv_obj_set_style_arc_width(s_arc, 18, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(s_arc, 18, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(s_arc, C_PANEL_HI, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(s_arc, C_HEAT, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(s_arc, C_FAINT, LV_PART_INDICATOR | LV_STATE_DISABLED);
+    lv_obj_set_style_pad_all(s_arc, 14, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(s_arc, ARC_W, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(s_arc, ARC_W, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(s_arc, C_DIAL_TRACK, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(s_arc, C_COPPER, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(s_arc, C_MUTED, LV_PART_INDICATOR | LV_STATE_DISABLED);
+    lv_obj_set_style_arc_rounded(s_arc, true, LV_PART_MAIN);
+    lv_obj_set_style_arc_rounded(s_arc, true, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(s_arc, C_TEXT, LV_PART_KNOB);
-    lv_obj_set_style_pad_all(s_arc, 6, LV_PART_KNOB);
+    lv_obj_set_style_border_color(s_arc, C_COPPER, LV_PART_KNOB);
+    lv_obj_set_style_border_width(s_arc, 4, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(s_arc, 7, LV_PART_KNOB);
+    lv_obj_set_style_shadow_width(s_arc, 0, LV_PART_KNOB);
     lv_obj_set_style_bg_opa(s_arc, LV_OPA_TRANSP, LV_PART_KNOB | LV_STATE_DISABLED);
+    lv_obj_set_style_border_opa(s_arc, LV_OPA_TRANSP, LV_PART_KNOB | LV_STATE_DISABLED);
+    lv_obj_set_style_opa(s_arc, LV_OPA_COVER, LV_STATE_DISABLED);
     lv_obj_add_event_cb(s_arc, arc_event, LV_EVENT_VALUE_CHANGED, NULL);
-    s_set = lv_label_create(s_arc);
-    lv_obj_set_style_text_font(s_set, &hm_num_64, 0);
-    lv_obj_align(s_set, LV_ALIGN_CENTER, 0, 6);
-    s_set_cap = lv_label_create(s_arc);
-    lv_obj_set_style_text_color(s_set_cap, C_MUTED, 0);
-    lv_obj_align(s_set_cap, LV_ALIGN_CENTER, 0, -50);
-    s_minus = step_button(s_scr, LV_SYMBOL_MINUS, -1);
-    lv_obj_set_pos(s_minus, 440, 296);
-    s_plus = step_button(s_scr, LV_SYMBOL_PLUS, 1);
-    lv_obj_set_pos(s_plus, 686, 296);
+    s_set_cap = ui_label(s_arc, F_CAP, C_MUTED, "SET");
+    lv_obj_align(s_set_cap, LV_ALIGN_CENTER, 0, -72);
+    s_set = ui_label(s_arc, &hm_bc600_112, C_COPPER, "");
+    lv_obj_align(s_set, LV_ALIGN_CENTER, -10, 0);
+    s_set_deg = ui_label(s_arc, &hm_bc500_58, C_COPPER, "");
+    lv_obj_align_to(s_set_deg, s_set, LV_ALIGN_OUT_RIGHT_TOP, 0, 8);
+    lv_obj_add_flag(s_set, LV_OBJ_FLAG_EVENT_BUBBLE);
+    s_now = ui_label(s_arc, F_BODY, C_MUTED, "");
+    lv_obj_set_style_text_font(s_now, F_LABEL, 0);
+    lv_obj_align(s_now, LV_ALIGN_CENTER, 0, 70);
 
-    /* Bottom: mode, hold, lock */
-    s_mode = lv_buttonmatrix_create(s_scr);
-    lv_buttonmatrix_set_map(s_mode, s_mode_map);
-    lv_buttonmatrix_set_button_ctrl_all(s_mode, LV_BUTTONMATRIX_CTRL_CHECKABLE);
-    lv_buttonmatrix_set_one_checked(s_mode, true);
-    lv_obj_set_size(s_mode, 380, 72);
-    lv_obj_set_pos(s_mode, 16, 396);
-    lv_obj_set_style_bg_color(s_mode, C_PANEL_DIM, 0);
-    lv_obj_set_style_border_width(s_mode, 0, 0);
-    lv_obj_set_style_pad_all(s_mode, 4, 0);
-    lv_obj_set_style_pad_gap(s_mode, 4, 0);
-    lv_obj_set_style_bg_color(s_mode, C_PANEL_HI, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(s_mode, lv_color_hex(0x8A4A1F), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(s_mode, C_TEXT, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(s_mode, 0, LV_PART_ITEMS);
-    lv_obj_add_event_cb(s_mode, mode_event, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_t *steps = ui_box(s_left);
+    lv_obj_set_size(steps, LV_PCT(100), TOUCH_MIN);
+    lv_obj_align(steps, LV_ALIGN_BOTTOM_MID, 0, 0);
+    s_minus = ui_btn(steps, HM_ICON_MINUS, step_event, (void *)(intptr_t)-1);
+    lv_obj_set_width(s_minus, 88);
+    lv_obj_set_style_text_font(ui_btn_label(s_minus), &hm_icon_28, 0);
+    lv_obj_align(s_minus, LV_ALIGN_LEFT_MID, 0, 0);
+    s_plus = ui_btn(steps, HM_ICON_PLUS, step_event, (void *)(intptr_t)1);
+    lv_obj_set_width(s_plus, 88);
+    lv_obj_set_style_text_font(ui_btn_label(s_plus), &hm_icon_28, 0);
+    lv_obj_align(s_plus, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_t *range = ui_label(steps, F_BODY, C_MUTED, "5 to 35" DEG ", whole degrees");
+    lv_obj_center(range);
 
-    s_hold_dd = lv_dropdown_create(s_scr);
-    lv_dropdown_set_options_static(s_hold_dd, "No hold\nHold 1 h\nHold 2 h\nHold 4 h\nHold 8 h\nHold 24 h");
-    lv_dropdown_set_text(s_hold_dd, "Hold...");
-    lv_dropdown_set_dir(s_hold_dd, LV_DIR_TOP);
-    lv_dropdown_set_symbol(s_hold_dd, LV_SYMBOL_UP);
-    lv_obj_set_size(s_hold_dd, 180, 72);
-    lv_obj_set_pos(s_hold_dd, 410, 396);
-    lv_obj_set_style_bg_color(s_hold_dd, C_PANEL_HI, 0);
-    lv_obj_set_style_border_width(s_hold_dd, 0, 0);
-    lv_obj_set_style_pad_ver(s_hold_dd, 22, 0);
-    lv_obj_add_event_cb(s_hold_dd, hold_event, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_t *list = lv_dropdown_get_list(s_hold_dd);
-    lv_obj_set_style_text_font(list, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_pad_ver(list, 12, 0);
-    lv_obj_set_style_bg_color(list, C_PANEL_HI, 0);
-    lv_obj_set_style_max_height(list, 380, 0);
+    /* Right: mode, hold, details, lock and schedule */
+    lv_obj_t *right = ui_col(body, GAP);
+    lv_obj_set_height(right, LV_PCT(100));
+    lv_obj_set_flex_grow(right, 1);
 
-    s_lock = lv_button_create(s_scr);
-    lv_obj_set_size(s_lock, 190, 72);
-    lv_obj_set_pos(s_lock, 600, 396);
-    lv_obj_set_style_shadow_width(s_lock, 0, 0);
-    lv_obj_set_style_radius(s_lock, 12, 0);
-    s_lock_lbl = lv_label_create(s_lock);
-    lv_obj_set_style_text_font(s_lock_lbl, &ui_font20i, 0);
-    lv_obj_center(s_lock_lbl);
-    lv_obj_add_event_cb(s_lock, lock_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *modes = ui_row(right, GAP);
+    static const char *const mode_txt[3] = { "Heat", "Frost", "Off" };
+    for (int i = 0; i < 3; i++) {
+        s_mode[i] = wide_btn(modes, mode_txt[i], mode_event, (void *)(intptr_t)i);
+    }
+
+    lv_obj_t *hold = ui_col(right, 6);
+    ui_caption(hold, "HOLD");
+    lv_obj_t *chips = ui_row(hold, 8);
+    static const char *const hold_txt[4] = { "Off", "1 h", "4 h", "24 h" };
+    for (int i = 0; i < 4; i++) {
+        s_hold[i] = wide_btn(chips, hold_txt[i], hold_event, (void *)(intptr_t)i);
+    }
+
+    lv_obj_t *info = ui_panel(right);
+    lv_obj_set_width(info, LV_PCT(100));
+    lv_obj_set_flex_grow(info, 1);
+    lv_obj_set_style_pad_hor(info, 14, 0);
+    lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(info, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    for (int i = 0; i < 4; i++) {
+        lv_obj_t *r = ui_box(info);
+        lv_obj_set_size(r, LV_PCT(100), 20);
+        s_info_key[i] = ui_label(r, F_BODY, C_MUTED, "");
+        lv_obj_align(s_info_key[i], LV_ALIGN_LEFT_MID, 0, 0);
+        s_info_val[i] = ui_label(r, F_CAP, C_TEXT, "");
+        lv_obj_align(s_info_val[i], LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+
+    lv_obj_t *bottom = ui_row(right, GAP);
+    s_lock = wide_btn(bottom, "", lock_event, NULL);
+    s_sched = wide_btn(bottom, HM_ICON_CALENDAR "  Schedule", sched_event, NULL);
     return s_scr;
 }
+
+const ui_screen_ops_t ui_zone_ops = { zone_create, zone_refresh, zone_tick };

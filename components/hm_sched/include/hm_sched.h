@@ -190,6 +190,13 @@ bool hm_sched_scanning(hm_sched_t *s);
 
 void hm_sched_set_interval(hm_sched_t *s, uint32_t poll_interval_ms);
 
+/* Zero one stat's counters, or every stat's with addr 0. */
+void hm_sched_clear_counters(hm_sched_t *s, uint8_t addr);
+
+/* Poll a stat at the next free slot, offline or not. Returns -1 if it is not
+ * added. */
+int hm_sched_poll_now(hm_sched_t *s, uint8_t addr);
+
 /* Run one slot. *did says what ran. Returns the milliseconds until something
  * is due (0 = call again now). */
 uint32_t hm_sched_step(hm_sched_t *s, hm_step_t *did);

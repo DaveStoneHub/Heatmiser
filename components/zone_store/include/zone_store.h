@@ -7,7 +7,8 @@
  *   restored at boot; every saved zone is added to the poller.
  * - The poller's events keep each zone's view current. Readers take a copy
  *   with zone_store_get(); zone_store_take_dirty() says which zones changed.
- * - Change requests (setpoint, mode, key lock, hold, hot water) are queued
+ * - Change requests (setpoint, mode, key lock, hold, hot water, programme)
+ *   are queued
  *   on the bus. Until the stat confirms one, the view carries it as pending,
  *   so the screen can show what was asked for. A write that fails is dropped,
  *   the view falls back to what the stat reports, and a notice is posted.
@@ -64,6 +65,24 @@ zone_err_t zone_store_set_lock(uint8_t addr, bool locked);
 zone_err_t zone_store_set_hold(uint8_t addr, unsigned minutes);
 zone_err_t zone_store_set_hw(uint8_t addr, int cmd);  /* HM_HW_FOLLOW_TIMER etc. */
 
+/* Hot water on for this many minutes, then back to the timer (0 ends a
+ * boost now). The bridge times the boost; if it restarts mid-boost, the stat
+ * goes back to its timer at boot. */
+zone_err_t zone_store_hw_boost(uint8_t addr, unsigned minutes);
+
+/* One programme day (see zone_view.h): four comfort levels, or four hot
+ * water on/off pairs. Periods must be in time order, unused ones (hour 24)
+ * last. */
+zone_err_t zone_store_set_comfort(uint8_t addr, int day, const hm_period_t p[4]);
+zone_err_t zone_store_set_hw_timer(uint8_t addr, int day, const hm_period_t on[4],
+                                   const hm_period_t off[4]);
+
+/* Every online stat: set its clock to the bridge's local time, or start a
+ * holiday of this many hours (0 ends it). Return how many stats the change
+ * was queued for, or -1 for clocks when the bridge's own clock is not set. */
+int zone_store_sync_clocks(void);
+int zone_store_holiday_all(unsigned hours);
+
 /* Scan addresses 1-32. Stats that answer join the list; zones that do not
  * answer stay (remove them by hand). */
 void zone_store_scan(void);
@@ -75,6 +94,42 @@ typedef struct {
     uint8_t added;       /* of which new to the list */
 } zone_scan_t;
 void zone_store_scan_state(zone_scan_t *out);
+
+/* ---- the bus, for the diagnostics and settings screens -------------------- */
+
+typedef struct {
+    uint32_t polls, poll_ok, timeouts, crc, bad;
+    uint32_t writes_ok, writes_failed;
+    bool     seen;               /* answered since boot */
+    uint32_t seen_age_s;
+} zone_diag_t;
+bool zone_store_diag(uint8_t addr, zone_diag_t *out);
+
+typedef enum { ZONE_RX_OK = 0, ZONE_RX_TIMEOUT, ZONE_RX_CRC, ZONE_RX_BAD } zone_rx_t;
+typedef struct {
+    uint32_t  age_ms;
+    bool      tx;
+    zone_rx_t rx;                /* rx only */
+    uint16_t  len;               /* whole frame */
+    uint8_t   n;                 /* bytes in b */
+    uint8_t   b[10];
+    uint16_t  timeout_ms;
+} zone_frame_t;
+/* The last bus frames, oldest first. */
+size_t zone_store_frames(zone_frame_t *out, size_t max);
+
+void zone_store_clear_counters(void);
+/* Read this stat at the next free slot. */
+zone_err_t zone_store_read_now(uint8_t addr);
+
+typedef struct {
+    uint32_t poll_ms;
+    uint8_t  master;
+    uint32_t baud;
+} zone_bus_info_t;
+void zone_store_bus_info(zone_bus_info_t *out);
+/* Poll interval, 2-120 s, saved. */
+zone_err_t zone_store_set_poll_interval(uint32_t ms);
 
 /* Messages for the user: a failed write, a scan result. Returns false when
  * there are none. */
