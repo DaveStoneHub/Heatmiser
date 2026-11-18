@@ -1,5 +1,27 @@
 # Bench: milestone 2, poller and writes on every stat
 
+## Bench results (18 Nov 2026)
+
+**Gate passed on 11 of 12 stats; stat 2 set aside.** House bus, Touchpad
+removed, master 0x81.
+
+| Check | Result |
+| --- | --- |
+| Single stat on the bench (`gate 1 slow`) | PASS: 6 of 6 steps, no retries; the display followed every change |
+| House bus, stats 1 and 3-12 (10 PRT-N, 1 PRT/HW-N at address 3) | PASS: 66 of 66 steps confirmed first time, 0 retries |
+| Write plus read-back | 460 ms each; up to about 1.5 s when a poll of another stat was already queued |
+| Stat 2 | Not answering; judged to be a faulty stat or damaged wiring. Left out of the gate for now |
+
+**The Touchpad must be physically disconnected.** On the first house run the
+Touchpad was still wired in, in its "shutdown" mode. Every stat acked every
+write but put back the Touchpad's value straight away, so only writes of the
+value the stat already had read back correctly (40 of 72 steps failed). A
+30-second `sniff` heard nothing from it, so a quiet sniff does not prove the
+Touchpad is inactive. With it unplugged, every write took first time.
+
+Signature to recognise: `read-back differs after 6 attempt(s)` on every
+stat, for every write that changes a value.
+
 Milestone 2 adds the scheduler that will run the bridge: a round-robin poll of
 every stat's full DCB, a write queue that goes first, read-back confirmation of
 every write, retries, offline back-off and a bus scan. This guide checks it on
@@ -12,7 +34,9 @@ Allow about 30 minutes. The gate itself takes about a minute for 12 stats.
 
 ## Before you start
 
-- **The Touchpad must be off the bus.** Only one master may talk on it. Note
+- **The Touchpad must be unplugged from the bus, not just shut down.** Only
+  one master may talk on it, and in "shutdown" mode it still resets the stats
+  (see the results above). Note
   the zone names from the Touchpad first if you have not already; they live in
   the Touchpad, not the stats.
 - Connect the bridge to the house bus at one end of the chain, board A to the
