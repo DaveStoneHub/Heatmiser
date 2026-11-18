@@ -9,20 +9,9 @@
 #include "hm_dcb.h"
 #include "hm_frame.h"
 #include "appendix_a_crc.h"
+#include "test_util.h"
 
-static int s_fail, s_pass;
-
-#define CHECK(cond) do { \
-    if (cond) { s_pass++; } \
-    else { s_fail++; fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #cond); } \
-} while (0)
-
-#define CHECK_EQ(a, b) do { \
-    long long _a = (long long)(a), _b = (long long)(b); \
-    if (_a == _b) { s_pass++; } \
-    else { s_fail++; fprintf(stderr, "%s:%d: %s == %s failed: 0x%llX vs 0x%llX\n", \
-                             __FILE__, __LINE__, #a, #b, _a, _b); } \
-} while (0)
+int g_fail, g_pass;
 
 static uint16_t bitwise_crc(const uint8_t *p, size_t n)
 {
@@ -455,15 +444,20 @@ static void test_decode_prt_7day(void)
     dcb[0] = 0;
     dcb[1] = 148;
     dcb[16] = 1;
+    /* The 5/2 blocks (index 40-63) stay in the DCB; Mon-Sun follow from 64
+     * (unique address 103). */
     for (int day = 0; day < 7; day++) {
         for (int p = 0; p < 4; p++) {
-            dcb[40 + day * 12 + p * 3] = (uint8_t)(6 + p * 4);
-            dcb[40 + day * 12 + p * 3 + 1] = 30;
-            dcb[40 + day * 12 + p * 3 + 2] = (uint8_t)(15 + day);
+            dcb[64 + day * 12 + p * 3] = (uint8_t)(6 + p * 4);
+            dcb[64 + day * 12 + p * 3 + 1] = 30;
+            dcb[64 + day * 12 + p * 3 + 2] = (uint8_t)(15 + day);
         }
     }
     CHECK_EQ(hm_dcb_decode(dcb, sizeof dcb, &d), 0);
     CHECK_EQ(d.comfort_days, 7);
+    CHECK_EQ(d.comfort[0][0].hour, 6);
+    CHECK_EQ(d.comfort[4][1].hour, 10); /* Friday, unique address 151 */
+    CHECK_EQ(d.comfort[4][1].temp, 19);
     CHECK_EQ(d.comfort[6][3].hour, 18);
     CHECK_EQ(d.comfort[6][3].temp, 21);
     CHECK_EQ(d.comfort[0][0].temp, 15);
@@ -566,7 +560,9 @@ int main(void)
     test_decode_prthw_52();
     test_decode_short();
     test_print_smoke();
+    test_write_all();
+    test_sched_all();
 
-    printf("hm_proto host tests: %d passed, %d failed\n", s_pass, s_fail);
-    return s_fail ? 1 : 0;
+    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
 }

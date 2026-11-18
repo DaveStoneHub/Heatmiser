@@ -1,5 +1,6 @@
 /*
- * Heatmiser bridge, milestone 1: RS485 bus bring-up console.
+ * Heatmiser bridge: RS485 bus bring-up (milestone 1) and the poller with its
+ * write queue (milestone 2), driven from a console.
  *
  * Connect a terminal to the board's console (115200 baud) and type "help".
  */
@@ -10,6 +11,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "hm_bus.h"
+#include "hm_poller.h"
 
 static const char *TAG = "main";
 
@@ -20,6 +22,7 @@ void app_main(void)
 
     const hm_bus_config_t cfg = HM_BUS_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(hm_bus_init(&cfg));
+    ESP_ERROR_CHECK(hm_poller_init()); /* paused until 'poll start' or 'poll scan' */
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -29,6 +32,7 @@ void app_main(void)
     esp_console_register_help_command();
     bench_register_commands();
     soak_register_command();
+    poll_register_commands();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -43,8 +47,8 @@ void app_main(void)
 #error "Select a console (UART, USB CDC or USB Serial/JTAG) in menuconfig"
 #endif
 
-    printf("\nHeatmiser RS485 bring-up. Default stat %d, master 0x%02X.\n"
-           "Try: read, scan, turnaround, sniff, soak start. Type 'help' for all.\n\n",
+    printf("\nHeatmiser RS485 bridge. Default stat %d, master 0x%02X.\n"
+           "Milestone 2: poll scan, poll status, set <addr> temp 21, gate. Type 'help' for all.\n\n",
            CONFIG_HM_BUS_DEFAULT_STAT, cfg.master_addr);
     ESP_LOGI(TAG, "console ready");
     ESP_ERROR_CHECK(esp_console_start_repl(repl));

@@ -18,6 +18,82 @@ const char *hm_model_str(uint8_t model)
     return "unknown";
 }
 
+int hm_dcb_index(uint8_t model, uint8_t prog_mode, uint16_t ua)
+{
+    const bool prt = model == HM_MODEL_PRT || model == HM_MODEL_PRT_E;
+    const bool hw = model == HM_MODEL_PRTHW;
+    if (ua <= 25) {
+        return ua;
+    }
+    if (ua >= 32 && ua <= 41) {
+        return ua - 6;
+    }
+    if (hw) {
+        if (ua >= 42 && ua <= 102) {
+            return ua - 6;
+        }
+        if (prog_mode && ua >= HM_UA_COMFORT_7DAY && ua < HM_UA_HW_TIMER_7DAY + 7 * 16) {
+            return ua - 6;
+        }
+        return -1;
+    }
+    if (prt) {
+        if (ua >= 43 && ua <= 70) {
+            return ua - 7;
+        }
+        if (prog_mode && ua >= HM_UA_COMFORT_7DAY && ua < HM_UA_COMFORT_7DAY + 7 * 12) {
+            return ua - 39;
+        }
+    }
+    return -1;
+}
+
+uint16_t hm_dcb_expected_len(uint8_t model, uint8_t prog_mode)
+{
+    switch (model) {
+    case HM_MODEL_DT:
+    case HM_MODEL_DT_E:
+        return HM_DCB_MIN_LEN;
+    case HM_MODEL_PRT:
+    case HM_MODEL_PRT_E:
+        return prog_mode ? HM_PRT_DCB_LEN_7DAY : HM_PRT_DCB_LEN_52;
+    case HM_MODEL_PRTHW:
+        return prog_mode ? HM_PRTHW_DCB_LEN_7DAY : HM_PRTHW_DCB_LEN_52;
+    }
+    return 0;
+}
+
+hm_mode_t hm_dcb_mode(const hm_dcb_t *d)
+{
+    if (!d->on_off) {
+        return HM_MODE_OFF;
+    }
+    return d->run_mode ? HM_MODE_FROST : HM_MODE_HEAT;
+}
+
+const char *hm_mode_str(hm_mode_t m)
+{
+    switch (m) {
+    case HM_MODE_OFF:   return "off";
+    case HM_MODE_HEAT:  return "heat";
+    case HM_MODE_FROST: return "frost";
+    }
+    return "?";
+}
+
+uint16_t hm_dcb_room_t10(const hm_dcb_t *d)
+{
+    switch (d->sensor_sel) {
+    case 1: /* remote air only */
+    case 4: /* remote air + floor */
+        return d->remote_air_t10;
+    case 2: /* floor only */
+        return d->floor_t10;
+    default:
+        return d->air_t10;
+    }
+}
+
 static void decode_comfort(const uint8_t *p, hm_period_t day[4])
 {
     for (int i = 0; i < 4; i++) {
@@ -112,22 +188,24 @@ int hm_dcb_decode(const uint8_t *dcb, size_t n, hm_dcb_t *out)
     out->clk_min = dcb[clk + 2];
     out->clk_sec = dcb[clk + 3];
 
-    size_t comfort = clk + 4;
-    uint8_t days = out->prog_mode ? 7 : 2;
-    if (n < comfort + (size_t)days * 12) {
+    const uint8_t days = out->prog_mode ? 7 : 2;
+    const int comfort = hm_dcb_index(out->model, out->prog_mode,
+                                     out->prog_mode ? HM_UA_COMFORT_7DAY : HM_UA_COMFORT_52);
+    if (comfort < 0 || n < (size_t)comfort + (size_t)days * 12) {
         return 0;
     }
     out->comfort_days = days;
     for (uint8_t d = 0; d < days; d++) {
-        decode_comfort(&dcb[comfort + d * 12u], out->comfort[d]);
+        decode_comfort(&dcb[comfort + d * 12], out->comfort[d]);
     }
 
     if (out->has_hw) {
-        size_t hw = comfort + (size_t)days * 12;
-        if (n >= hw + (size_t)days * 16) {
+        const int hw = hm_dcb_index(out->model, out->prog_mode,
+                                    out->prog_mode ? HM_UA_HW_TIMER_7DAY : HM_UA_HW_TIMER_52);
+        if (hw >= 0 && n >= (size_t)hw + (size_t)days * 16) {
             out->hw_timer_days = days;
             for (uint8_t d = 0; d < days; d++) {
-                decode_hw(&dcb[hw + d * 16u], out->hw_on_at[d], out->hw_off_at[d]);
+                decode_hw(&dcb[hw + d * 16], out->hw_on_at[d], out->hw_off_at[d]);
             }
         }
     }

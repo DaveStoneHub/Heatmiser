@@ -263,7 +263,7 @@ static void strip_echo(hm_txn_t *t)
     }
 }
 
-static esp_err_t transact_locked(uint8_t expect_stat, hm_txn_t *t)
+static esp_err_t transact_locked(uint8_t expect_stat, uint32_t reply_timeout_ms, hm_txn_t *t)
 {
     const int port = s_cfg.uart_num;
 
@@ -279,7 +279,7 @@ static esp_err_t transact_locked(uint8_t expect_stat, hm_txn_t *t)
     t->t_tx_done_us = esp_timer_get_time();
     edge_arm();
 
-    const int64_t first_deadline = t->t_tx_done_us + (int64_t)s_cfg.reply_timeout_ms * 1000;
+    const int64_t first_deadline = t->t_tx_done_us + (int64_t)reply_timeout_ms * 1000;
     const int64_t hard_cap = t->t_tx_done_us + (int64_t)FRAME_HARD_CAP_MS * 1000;
     const TickType_t gap_ticks = pdMS_TO_TICKS(s_cfg.interbyte_timeout_ms);
 
@@ -349,6 +349,12 @@ static esp_err_t transact_locked(uint8_t expect_stat, hm_txn_t *t)
 
 esp_err_t hm_bus_transact(const uint8_t *req, size_t req_len, uint8_t expect_stat, hm_txn_t *t)
 {
+    return hm_bus_transact_timeout(req, req_len, expect_stat, 0, t);
+}
+
+esp_err_t hm_bus_transact_timeout(const uint8_t *req, size_t req_len, uint8_t expect_stat,
+                                  uint32_t reply_timeout_ms, hm_txn_t *t)
+{
     if (!s_ready || !req || !t || req_len == 0 || req_len > HM_MAX_FRAME) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -358,7 +364,8 @@ esp_err_t hm_bus_transact(const uint8_t *req, size_t req_len, uint8_t expect_sta
     t->req_len = req_len;
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    esp_err_t err = transact_locked(expect_stat, t);
+    esp_err_t err = transact_locked(expect_stat,
+                                    reply_timeout_ms ? reply_timeout_ms : s_cfg.reply_timeout_ms, t);
 
     s_cnt.txns++;
     s_cnt.uart_errors += t->uart_errors;

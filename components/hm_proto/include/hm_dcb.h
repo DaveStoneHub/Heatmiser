@@ -59,6 +59,42 @@ extern "C" {
 #define HM_DCB_MIN_LEN        36  /* DT ends after heating state */
 #define HM_PRT_DCB_LEN_52     64
 #define HM_PRT_DCB_LEN_7DAY   148
+#define HM_PRTHW_DCB_LEN_52   97
+#define HM_PRTHW_DCB_LEN_7DAY 293
+#define HM_DCB_MAX_LEN        HM_PRTHW_DCB_LEN_7DAY
+
+/* Unique addresses (the "unique address" column; used in request frames). */
+#define HM_UA_TEMP_FORMAT     5
+#define HM_UA_FROST_ENABLE    7
+#define HM_UA_SENSOR_SEL      13
+#define HM_UA_PROG_MODE       16
+#define HM_UA_FROST_TEMP      17
+#define HM_UA_SET_TEMP        18
+#define HM_UA_FLOOR_MAX       19
+#define HM_UA_ON_OFF          21
+#define HM_UA_KEY_LOCK        22
+#define HM_UA_RUN_MODE        23
+#define HM_UA_HOLIDAY_HOURS   24  /* 2 bytes */
+#define HM_UA_HOLD_MINUTES    32  /* 2 bytes */
+#define HM_UA_REMOTE_AIR      34
+#define HM_UA_FLOOR_TEMP      36
+#define HM_UA_AIR_TEMP        38
+#define HM_UA_ERROR_CODE      40
+#define HM_UA_HEATING_ON      41
+#define HM_UA_HW_STATE        42  /* PRTHW only */
+#define HM_UA_CLOCK           43  /* 4 bytes: weekday, hour, minute, second */
+#define HM_UA_COMFORT_52      47  /* weekday 47, weekend 59; 12 bytes each */
+#define HM_UA_HW_TIMER_52     71  /* PRTHW: weekday 71, weekend 87; 16 bytes each */
+#define HM_UA_COMFORT_7DAY    103 /* Mon 103 ... Sun 175; 12 bytes each */
+#define HM_UA_HW_TIMER_7DAY   187 /* PRTHW: Mon 187 ... Sun 283; 16 bytes each */
+
+/* Index in the DCB of unique address `ua` for this model and programme mode
+ * (0 = 5/2, 1 = 7 day), or -1 if the model has no such address. The 7-day
+ * blocks follow the 5/2 blocks, which stay in the DCB in 7-day mode. */
+int hm_dcb_index(uint8_t model, uint8_t prog_mode, uint16_t ua);
+
+/* DCB length this model has in this programme mode, or 0 if unknown. */
+uint16_t hm_dcb_expected_len(uint8_t model, uint8_t prog_mode);
 
 typedef struct {
     uint8_t hour;     /* 24 = period cancelled */
@@ -109,12 +145,14 @@ typedef struct {
     bool     has_clock;        /* not on DT */
     uint8_t  clk_wday, clk_hour, clk_min, clk_sec;
 
-    /* Comfort levels: 2 day groups (weekday, weekend) in 5/2 mode, 7 (Mon-Sun)
-     * in 7-day mode, 4 periods each. comfort_days = 0 if the DCB is too short. */
+    /* Comfort levels of the active programme: 2 day groups (weekday, weekend)
+     * in 5/2 mode from unique address 47, 7 (Mon-Sun) in 7-day mode from 103.
+     * 4 periods each. comfort_days = 0 if the DCB is too short. */
     uint8_t     comfort_days;
     hm_period_t comfort[7][4];
 
-    /* Hot water timers (PRTHW): 4 on/off pairs per day group. */
+    /* Hot water timers (PRTHW), same day groups: 4 on/off pairs per day, from
+     * unique address 71 (5/2) or 187 (7 day). */
     uint8_t     hw_timer_days;
     hm_period_t hw_on_at[7][4];
     hm_period_t hw_off_at[7][4];
@@ -126,6 +164,21 @@ typedef struct {
 int hm_dcb_decode(const uint8_t *dcb, size_t n, hm_dcb_t *out);
 
 const char *hm_model_str(uint8_t model);
+
+/* Heating mode as the bridge sees it: on_off and run_mode combined. */
+typedef enum {
+    HM_MODE_OFF = 0,   /* on_off = 0 */
+    HM_MODE_HEAT,      /* on_off = 1, run_mode = 0 */
+    HM_MODE_FROST,     /* on_off = 1, run_mode = 1 */
+} hm_mode_t;
+
+hm_mode_t hm_dcb_mode(const hm_dcb_t *d);
+const char *hm_mode_str(hm_mode_t m);
+
+/* LocalTemperature by the stat's sensor selection, in tenths of a degree, or
+ * HM_TEMP_ABSENT. Floor-only stats report the floor sensor; the others report
+ * the air sensor they control on. */
+uint16_t hm_dcb_room_t10(const hm_dcb_t *d);
 
 /* Human-readable dump for the bring-up console. */
 void hm_dcb_print(FILE *f, const hm_dcb_t *d);

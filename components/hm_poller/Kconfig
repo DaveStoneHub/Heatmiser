@@ -1,0 +1,47 @@
+menu "Heatmiser poller"
+
+    config HM_POLL_INTERVAL_MS
+        int "Poll interval (ms): each stat's full DCB is read once per interval"
+        range 5000 60000
+        default 10000
+
+    config HM_POLL_WRITE_TIMEOUT_MS
+        int "Write ack timeout (ms)"
+        default 1000
+        help
+            The V3 document asks for 1000 ms. The bench measured read
+            turnaround at about 7 ms; keep the spec value for writes until
+            write turnaround has been measured too.
+
+    config HM_POLL_WRITE_RETRIES
+        int "Write retries after the first attempt"
+        range 0 5
+        default 5
+
+    config HM_POLL_OFFLINE_AFTER
+        int "Missed polls in a row before a stat is offline"
+        range 1 10
+        default 3
+
+    config HM_POLL_OFFLINE_RETRY_MS
+        int "Retry interval for an offline stat (ms)"
+        default 60000
+
+    config HM_POLL_SCAN_TIMEOUT_MS
+        int "Scan first-pass timeout (ms)"
+        range 20 1000
+        default 100
+        help
+            Turnaround measured on the bench was 7 ms (max 9.5 ms), so 100 ms
+            leaves a wide margin and keeps an empty-bus scan to a few seconds.
+
+    config HM_POLL_SCAN_RECHECK_MS
+        int "Scan second-pass timeout for the misses (ms, 0 = no second pass)"
+        range 0 2000
+        default 300
+
+    config HM_POLL_TASK_PRIORITY
+        int "Poller task priority"
+        default 10
+
+endmenu
