@@ -15,9 +15,9 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `hm_sched`: write queue first, round-robin full-DCB poll, read-back confirmation, retries, offline back-off, scan (pure C) | Done, host tested against simulated stats |
 | `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time | Done, bench proven (milestone 1) |
 | `hm_poller`: the bus task running `hm_sched` on the board | Done, bench proven (milestone 2) |
-| `zone_store`: saved zone list and names in NVS, a live view of each stat, pending writes with failure notices | Done; the view and the saved format are host tested |
+| `zone_store`: saved zone list and names in NVS, a live view of each stat (including its programme), pending writes with failure notices, hot water boost, clock sync, holiday for all, bus counters and frame trace | Done; the view, programme helpers and saved format are host tested |
 | `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Built; first run on the board due |
-| `ui`: dashboard, zone detail, setup (scan, rename, identify, remove), drift test pattern | Built; desktop preview renders every screen |
+| `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
 | `net`: Wi-Fi station, SNTP clock, timezone | Built |
 | Gate: no drift during a 24 h soak with Wi-Fi on | Due; see [bench-milestone3.md](docs/bench-milestone3.md) |
 
