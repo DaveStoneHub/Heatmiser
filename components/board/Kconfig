@@ -1,0 +1,29 @@
+menu "Waveshare 7 inch display"
+
+    config BOARD_LCD_PCLK_MHZ
+        int "RGB pixel clock (MHz)"
+        range 10 24
+        default 16
+        help
+            Waveshare's demo runs the panel at 16 MHz, about 40 frames a
+            second. A higher clock draws more PSRAM bandwidth and makes drift
+            more likely when Wi-Fi and flash are busy.
+
+    config BOARD_LCD_BOUNCE_LINES
+        int "Bounce buffer height (lines)"
+        range 4 48
+        default 10
+        help
+            Two internal-RAM bounce buffers of this many lines feed the panel,
+            so it keeps streaming while PSRAM is busy. 480 must divide evenly
+            by this. 10 lines is 2 x 16 KB.
+
+    config BOARD_LVGL_TASK_PRIORITY
+        int "LVGL task priority"
+        default 4
+
+    config BOARD_LVGL_TASK_STACK
+        int "LVGL task stack (bytes)"
+        default 8192
+
+endmenu

@@ -25,6 +25,9 @@ int  hm_poller_add(uint8_t addr);
 int  hm_poller_remove(uint8_t addr);
 void hm_poller_scan(void);
 bool hm_poller_scanning(void);
+/* Scan progress: pass (1 or 2) and the address being probed. Returns
+ * hm_poller_scanning(). */
+bool hm_poller_scan_state(uint8_t *pass, uint8_t *next);
 void hm_poller_set_interval(uint32_t ms);
 uint32_t hm_poller_interval(void);
 
