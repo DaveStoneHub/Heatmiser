@@ -81,7 +81,7 @@ static lv_obj_t *system_create(void)
         lv_obj_set_width(n, 160);
         s_val[i] = ui_label(r, F_LABEL, C_TEXT, "");
         lv_obj_set_flex_grow(s_val[i], 1);
-        lv_label_set_long_mode(s_val[i], LV_LABEL_LONG_DOT);
+        ui_label_dots(s_val[i]);
     }
 
     lv_obj_t *row = ui_row(body, GAP);

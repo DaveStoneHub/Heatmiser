@@ -119,6 +119,12 @@ lv_obj_t *ui_col(lv_obj_t *parent, int gap);
 lv_obj_t *ui_panel(lv_obj_t *parent);    /* tile background, border, radius */
 lv_obj_t *ui_label(lv_obj_t *parent, const lv_font_t *f, lv_color_t c, const char *text);
 lv_obj_t *ui_caption(lv_obj_t *parent, const char *text);
+/* One line that does not fit: slide it slowly back and forth (names), or
+ * end it with dots (everything else). Give the label a width first. */
+void ui_label_marquee(lv_obj_t *l);
+void ui_label_dots(lv_obj_t *l);
+/* Set a marquee label's text, leaving it moving if the text is the same. */
+void ui_marquee_text(lv_obj_t *l, const char *text);
 
 typedef enum {
     UI_BTN_PLAIN = 0,

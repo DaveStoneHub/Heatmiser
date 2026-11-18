@@ -62,7 +62,11 @@ static void rebuild(void)
         for (int c = 0; c < N_COLS; c++) {
             lv_obj_t *l = ui_label(r, c == 1 ? F_LABEL : &hm_bc600_20, C_TEXT, "");
             lv_obj_set_width(l, s_col_w[c]);
-            lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+            if (c == 1) {
+                ui_label_marquee(l);
+            } else {
+                ui_label_dots(l);
+            }
             s_cells[i][c] = l;
         }
         lv_label_set_text_fmt(s_cells[i][0], "%d", i + 1);
@@ -86,7 +90,7 @@ static void show_table(void)
             continue;
         }
         char buf[24];
-        lv_label_set_text(s_cells[i][1], v.cfg.name);
+        ui_marquee_text(s_cells[i][1], v.cfg.name);
         fmt_count(buf, sizeof buf, d.polls);
         lv_label_set_text(s_cells[i][2], buf);
         fmt_count(buf, sizeof buf, d.timeouts);
