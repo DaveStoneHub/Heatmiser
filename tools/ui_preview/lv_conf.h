@@ -11,6 +11,8 @@
 
 #define LV_FONT_MONTSERRAT_14 1  /* LVGL default; the UI uses its own fonts */
 
+#define LV_USE_QRCODE 1  /* the Matter pairing code */
+
 #define LV_USE_LOG 1
 #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
 #define LV_LOG_PRINTF 1

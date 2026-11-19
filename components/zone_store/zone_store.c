@@ -441,13 +441,29 @@ bool zone_store_get(uint8_t addr, zone_view_t *out)
     return ok;
 }
 
-uint32_t zone_store_take_dirty(void)
+/* New changes collect in s_dirty; each reader keeps its own copy, so the
+ * screen and Matter both see every change. Under s_mu. */
+static uint32_t s_dirty_for[ZONE_READERS];
+
+uint32_t zone_store_take_dirty_for(zone_reader_t r)
 {
+    if ((unsigned)r >= ZONE_READERS) {
+        return 0;
+    }
     lock();
-    uint32_t d = s_dirty;
+    for (int k = 0; k < ZONE_READERS; k++) {
+        s_dirty_for[k] |= s_dirty;
+    }
     s_dirty = 0;
+    uint32_t d = s_dirty_for[r];
+    s_dirty_for[r] = 0;
     unlock();
     return d;
+}
+
+uint32_t zone_store_take_dirty(void)
+{
+    return zone_store_take_dirty_for(ZONE_READER_UI);
 }
 
 zone_err_t zone_store_add(uint8_t addr)
@@ -507,6 +523,24 @@ zone_err_t zone_store_rename(uint8_t addr, const char *name)
         return ZONE_ERR_ADDR;
     }
     return save() == 0 ? ZONE_OK : ZONE_ERR_STORAGE;
+}
+
+zone_err_t zone_store_set_endpoint(uint8_t addr, uint16_t endpoint)
+{
+    if (!addr_ok(addr)) {
+        return ZONE_ERR_ADDR;
+    }
+    lock();
+    bool exists = s_used[addr - 1];
+    bool changed = exists && s_view[addr - 1].cfg.endpoint != endpoint;
+    if (changed) {
+        s_view[addr - 1].cfg.endpoint = endpoint;
+    }
+    unlock();
+    if (!exists) {
+        return ZONE_ERR_ADDR;
+    }
+    return !changed || save() == 0 ? ZONE_OK : ZONE_ERR_STORAGE;
 }
 
 typedef enum { F_SET, F_MODE, F_LOCK, F_HOLD, F_HW, F_COMFORT, F_HWT } field_t;

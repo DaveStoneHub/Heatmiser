@@ -1,8 +1,9 @@
 /*
  * Wi-Fi station and the clock: joins the saved network at boot, reconnects
  * with back-off, syncs time over SNTP and applies the saved timezone.
- * Matter (milestone 4) will provision Wi-Fi itself; until then the network
- * is set from the console with 'wifi join'.
+ * With Matter, the Matter stack owns the Wi-Fi driver and joins the network
+ * the controller gives it at pairing (or one set with 'wifi join'); net then
+ * only watches it, and runs the clock.
  */
 #pragma once
 #include <stdbool.h>
@@ -27,6 +28,8 @@ typedef struct {
 } net_status_t;
 
 esp_err_t net_init(void);  /* needs nvs_flash_init() first */
+/* Instead of net_init when Matter has started Wi-Fi. */
+esp_err_t net_attach(void);
 esp_err_t net_join(const char *ssid, const char *password);
 esp_err_t net_forget(void);
 void net_status(net_status_t *out);

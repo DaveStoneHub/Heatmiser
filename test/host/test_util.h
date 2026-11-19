@@ -19,3 +19,4 @@ extern int g_fail, g_pass;
 void test_write_all(void);
 void test_sched_all(void);
 void test_zone_all(void);
+void test_matter_all(void);

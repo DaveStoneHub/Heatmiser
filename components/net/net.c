@@ -22,6 +22,7 @@ static esp_netif_t *s_netif;
 static esp_timer_handle_t s_retry;
 static uint32_t s_retry_ms = RETRY_MIN_MS;
 static volatile bool s_up, s_time_set, s_started;
+static bool s_shared; /* Matter owns the Wi-Fi driver; we only watch it */
 static volatile unsigned s_disconnects;
 static char s_tz[64] = NET_TZ_DEFAULT;
 
@@ -40,7 +41,7 @@ static bool configured(char *ssid, size_t cap)
 static void retry_cb(void *arg)
 {
     (void)arg;
-    if (!s_up && configured(NULL, 0)) {
+    if (!s_shared && !s_up && configured(NULL, 0)) {
         esp_wifi_connect();
     }
 }
@@ -49,7 +50,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     (void)arg;
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-        if (configured(NULL, 0)) {
+        if (!s_shared && configured(NULL, 0)) {
             esp_wifi_connect();
         }
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
@@ -58,6 +59,10 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
             s_disconnects++;
         }
         s_up = false;
+        if (s_shared) {
+            ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d)", d ? d->reason : -1);
+            return; /* Matter reconnects */
+        }
         ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d); retrying in %u s", d ? d->reason : -1,
                  (unsigned)(s_retry_ms / 1000));
         esp_timer_stop(s_retry);
@@ -99,6 +104,40 @@ static void load_tz(void)
     tzset();
 }
 
+static void start_sntp(void)
+{
+    esp_sntp_config_t sc = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    sc.sync_cb = time_synced;
+    ESP_ERROR_CHECK(esp_netif_sntp_init(&sc));
+}
+
+esp_err_t net_attach(void)
+{
+    load_tz();
+    s_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!s_netif) {
+        return ESP_ERR_INVALID_STATE; /* Matter has not set up Wi-Fi */
+    }
+    s_shared = true;
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, on_event, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL));
+    const esp_timer_create_args_t ta = { .callback = retry_cb, .name = "wifi_retry" };
+    ESP_ERROR_CHECK(esp_timer_create(&ta, &s_retry));
+    esp_netif_ip_info_t ip;
+    if (esp_netif_get_ip_info(s_netif, &ip) == ESP_OK && ip.ip.addr) {
+        s_up = true; /* joined before we started watching */
+    }
+    s_started = true;
+    start_sntp();
+    char ssid[33];
+    if (configured(ssid, sizeof ssid)) {
+        ESP_LOGI(TAG, "Matter is joining '%s'", ssid);
+    } else {
+        ESP_LOGI(TAG, "no Wi-Fi saved; pair with a Matter controller, or 'wifi join <ssid> <password>'");
+    }
+    return ESP_OK;
+}
+
 esp_err_t net_init(void)
 {
     load_tz();
@@ -119,10 +158,7 @@ esp_err_t net_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
     s_started = true;
-
-    esp_sntp_config_t sc = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
-    sc.sync_cb = time_synced;
-    ESP_ERROR_CHECK(esp_netif_sntp_init(&sc));
+    start_sntp();
 
     char ssid[33];
     if (configured(ssid, sizeof ssid)) {
