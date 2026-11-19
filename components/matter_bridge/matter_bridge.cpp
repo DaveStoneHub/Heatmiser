@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <esp_matter.h>
@@ -409,6 +410,10 @@ extern "C" esp_err_t matter_bridge_start(void)
         ESP_LOGE(TAG, "aggregator create failed");
         return ESP_FAIL;
     }
+    ESP_LOGI(TAG, "internal RAM before start: %u free, largest block %u, DMA %u",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
     esp_err_t err = esp_matter::start(event_cb);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Matter start failed: %s", esp_err_to_name(err));

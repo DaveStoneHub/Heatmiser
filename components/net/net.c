@@ -115,8 +115,9 @@ esp_err_t net_attach(void)
 {
     load_tz();
     s_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    if (!s_netif) {
-        return ESP_ERR_INVALID_STATE; /* Matter has not set up Wi-Fi */
+    wifi_mode_t mode;
+    if (!s_netif || esp_wifi_get_mode(&mode) != ESP_OK) {
+        return ESP_ERR_INVALID_STATE; /* Matter has not set up Wi-Fi, or it failed */
     }
     s_shared = true;
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, on_event, NULL));
@@ -146,7 +147,11 @@ esp_err_t net_init(void)
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         return err;
     }
-    s_netif = esp_netif_create_default_wifi_sta();
+    /* Matter may have made the station interface before its Wi-Fi start failed. */
+    s_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!s_netif) {
+        s_netif = esp_netif_create_default_wifi_sta();
+    }
     esp_netif_set_hostname(s_netif, "heatmiser-bridge");
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));

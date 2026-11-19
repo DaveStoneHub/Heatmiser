@@ -66,6 +66,18 @@ CONFIG_MBEDTLS_HKDF_C=y
 # from PSRAM.
 CONFIG_ESP_MATTER_MEM_ALLOC_MODE_EXTERNAL=y
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# Wi-Fi's static receive buffers must be internal (DMA) RAM, 1.6 KB each, and
+# by then the screen's bounce buffers have taken their share. Ten is enough
+# for a thermostat bridge; the dynamic buffers come from PSRAM.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+# Keep the Wi-Fi and lwIP fast paths out of IRAM. On the S3 IRAM and data RAM
+# share the same SRAM, so this gives about 40 KB back to the heap; the bridge
+# moves a few packets a second.
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+CONFIG_LWIP_IRAM_OPTIMIZATION=n
+# One BLE connection is all commissioning needs.
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
 # The generated data model (esp-matter 1.5 and later); the bridge is written to it.
 CONFIG_ESP_MATTER_ENABLE_GENERATED_DATA_MODEL=y
 # 32 stats, the PRT/HW-N's hot water endpoint (milestone 5) and a spare.
