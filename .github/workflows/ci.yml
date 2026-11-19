@@ -42,6 +42,12 @@ jobs:
       matrix:
         idf: [v5.4.1, v6.1.1]
     steps:
+      # A Matter build (connectedhomeip with debug info) needs more disk than
+      # the runner has free; drop toolchains this job does not use.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
       - uses: actions/checkout@v4
       # connectedhomeip is about 2,000 files; keep the compiler cache between runs.
       - uses: actions/cache/restore@v4
