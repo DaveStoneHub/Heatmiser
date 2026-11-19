@@ -1,6 +1,15 @@
 # Heatmiser Matter bridge firmware (ESP-IDF 5.x).
 # RS485 poller, zone store and touchscreen.
 cmake_minimum_required(VERSION 3.16)
+
+# On Windows a process command line is limited to 32,767 characters. Each
+# Matter source file is compiled with several hundred include directories,
+# which passes that limit when the repo sits in a long path, and ninja stops
+# with "CreateProcess: The parameter is incorrect". Response files keep the
+# flags out of the command line.
+if(CMAKE_HOST_WIN32)
+  set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON CACHE BOOL "" FORCE)
+endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(heatmiser_bridge)
 
