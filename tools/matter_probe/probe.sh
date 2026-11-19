@@ -3,20 +3,16 @@
 cd tools/matter_probe
 idf.py set-target esp32s3 >/dev/null 2>&1 || true
 idf.py reconfigure >/dev/null 2>&1 || true
-grep -A3 "espressif/esp_matter:" dependencies.lock
-M=managed_components/espressif__esp_matter
-find $M -name "esp_matter_*.h" -path "*esp_matter*" | grep -v connectedhomeip | head -40
-show() { # file pattern lines
-  f=$(find $M -name "$1" | grep -v connectedhomeip | head -1)
-  echo "=== $1 /$2/"
-  grep -n -A"$3" -E "$2" "$f" | head -400
-}
-show esp_matter_endpoint.h "namespace (thermostat|bridged_node|aggregator) \{" 25
-show esp_matter_cluster.h "namespace (thermostat|bridged_device_basic_information|thermostat_user_interface_configuration) \{" 45
-show esp_matter_core.h "resume|set_parent_endpoint|endpoint_t \*create|esp_err_t enable|esp_err_t destroy|ENDPOINT_FLAG|callback_t\)|typedef esp_err_t \(\*callback_t|namespace lock|chip_stack_lock|esp_err_t start|uint16_t get_id" 3
-show esp_matter_attribute.h "namespace (thermostat|bridged_device_basic_information|thermostat_user_interface_configuration) \{" 60
-show esp_matter_feature.h "namespace thermostat \{" 60
-show esp_matter_attribute_utils.h "esp_matter_(nullable_int16|nullable_uint16|enum8|bitmap16|char_str|bool|int16|uint8)\(|esp_err_t update|PRE_UPDATE" 2
-show esp_matter.h "include" 0
-grep -rn "struct config" $M/components/esp_matter/data_model/esp_matter_data_model.h 2>/dev/null | head
-grep -rln "namespace root_node" $M/components | head
+grep -A12 "espressif/esp_matter:" dependencies.lock | grep -E "version|esp_matter:"
+M=managed_components/espressif__esp_matter/components/esp_matter
+G=$M/data_model/generated
+ls $G $G/device_types $G/clusters 2>/dev/null | tr '\n' ' '
+echo
+for d in $(find $G -type d \( -iname "*thermostat*" -o -iname "*bridged*" -o -iname "*aggregator*" \)); do
+  for f in $d/*.h; do echo "=== FILE $f"; grep -v '^ *//\|^ \*\|^/\*\|^$' "$f"; done
+done
+for f in $M/esp_matter_core.h $M/data_model/esp_matter_data_model.h $(find $M -name esp_matter_endpoint.h) $M/data_model/esp_matter_cluster.h; do
+  echo "=== FILE $f"; grep -v '^ *\*\|^ */\*\|^$\|^ *//' "$f" | head -400
+done
+grep -rn "create_unique_id\|create_node_label" $M | head
+grep -rn "OnboardingCodesUtil\|GetQRCode" managed_components/espressif__esp_matter/connectedhomeip/connectedhomeip/src/app/server/OnboardingCodesUtil.h | head

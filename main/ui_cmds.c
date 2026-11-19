@@ -197,6 +197,8 @@ static int cmd_screen(int argc, char **argv)
         ui_show_diag();
     } else if (strcmp(sub, "system") == 0) {
         ui_show_system();
+    } else if (strcmp(sub, "matter") == 0) {
+        ui_show_matter();
     } else {
         ui_show_dash();
     }
@@ -218,8 +220,8 @@ void ui_register_commands(void)
                                         "backlight on|off, restart",
           .hint = "[status|soak|timeout|backlight|restart]", .func = cmd_display },
         { .command = "screen", .help = "Show a screen: dash, zone|schedule|timer|hotwater|rename <addr>, settings, "
-                                       "zones, diag, system",
-          .hint = "[dash|zone|schedule|timer|hotwater|rename|settings|zones|diag|system]",
+                                       "zones, diag, system, matter",
+          .hint = "[dash|zone|schedule|timer|hotwater|rename|settings|zones|diag|system|matter]",
           .func = cmd_screen },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) {
