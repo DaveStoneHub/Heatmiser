@@ -66,6 +66,8 @@ CONFIG_MBEDTLS_HKDF_C=y
 # from PSRAM.
 CONFIG_ESP_MATTER_MEM_ALLOC_MODE_EXTERNAL=y
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# The generated data model (esp-matter 1.5 and later); the bridge is written to it.
+CONFIG_ESP_MATTER_ENABLE_GENERATED_DATA_MODEL=y
 # 32 stats, the PRT/HW-N's hot water endpoint (milestone 5) and a spare.
 CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=34
 # The bench console owns UART0; no CHIP shell. No soft AP either.

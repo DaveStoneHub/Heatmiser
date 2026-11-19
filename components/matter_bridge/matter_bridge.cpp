@@ -21,7 +21,13 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#if __has_include(<setup_payload/OnboardingCodesUtil.h>)
+#include <setup_payload/OnboardingCodesUtil.h>
+#else
 #include <app/server/OnboardingCodesUtil.h>
+#endif
+#include <app-common/zap-generated/ids/Attributes.h>
+#include <app-common/zap-generated/ids/Clusters.h>
 #include <app/server/Server.h>
 #include <credentials/FabricTable.h>
 #include <platform/CHIPDeviceLayer.h>
@@ -236,42 +242,51 @@ void push(int i, const zone_view_t &v)
     z.pushed = true;
 }
 
-/* Build a bridged thermostat on ep (made by create or resume). */
+/* Optional attributes the bridge reports, made only if the data model has
+ * not made them already. */
+void ensure(cluster_t *c, uint32_t attr, attribute_t *(*make)(cluster_t *))
+{
+    if (c && !attribute::get(c, attr)) {
+        make(c);
+    }
+}
+
+/* Turn a fresh bridged node endpoint into a heat-only thermostat. */
 esp_err_t build_thermostat(endpoint_t *ep, const zone_view_t &v)
 {
-    endpoint::bridged_node::config_t bn;
-    esp_err_t e = endpoint::bridged_node::add(ep, &bn);
-    if (e != ESP_OK) {
-        return e;
-    }
     endpoint::thermostat::config_t tc;
     tc.thermostat.control_sequence_of_operation = MM_CONTROL_HEATING_ONLY;
     tc.thermostat.system_mode = MM_SYSTEM_MODE_HEAT;
-    e = endpoint::thermostat::add(ep, &tc);
+    tc.thermostat.feature_flags = cluster::thermostat::feature::heating::get_id();
+    tc.thermostat.features.heating.occupied_heating_setpoint = 2000;
+    esp_err_t e = endpoint::thermostat::add(ep, &tc);
     if (e != ESP_OK) {
         return e;
     }
+    namespace ta = cluster::thermostat::attribute;
+    namespace TA = Thermostat::Attributes;
     cluster_t *th = cluster::get(ep, Thermostat::Id);
-    cluster::thermostat::feature::heating::config_t heat;
-    heat.abs_min_heat_setpoint_limit = MM_SETPOINT_MIN;
-    heat.abs_max_heat_setpoint_limit = MM_SETPOINT_MAX;
-    heat.min_heat_setpoint_limit = MM_SETPOINT_MIN;
-    heat.max_heat_setpoint_limit = MM_SETPOINT_MAX;
-    cluster::thermostat::feature::heating::add(th, &heat);
-    cluster::thermostat::attribute::create_pi_heating_demand(th, 0);
-    cluster::thermostat::attribute::create_thermostat_running_state(th, 0);
-    cluster::thermostat::attribute::create_temperature_setpoint_hold(th, 0);
-    cluster::thermostat::attribute::create_temperature_setpoint_hold_duration(th, nullable<uint16_t>());
+    ensure(th, TA::AbsMinHeatSetpointLimit::Id, [](cluster_t *c) { return ta::create_abs_min_heat_setpoint_limit(c, MM_SETPOINT_MIN); });
+    ensure(th, TA::AbsMaxHeatSetpointLimit::Id, [](cluster_t *c) { return ta::create_abs_max_heat_setpoint_limit(c, MM_SETPOINT_MAX); });
+    ensure(th, TA::MinHeatSetpointLimit::Id, [](cluster_t *c) { return ta::create_min_heat_setpoint_limit(c, MM_SETPOINT_MIN); });
+    ensure(th, TA::MaxHeatSetpointLimit::Id, [](cluster_t *c) { return ta::create_max_heat_setpoint_limit(c, MM_SETPOINT_MAX); });
+    ensure(th, TA::ThermostatRunningState::Id, [](cluster_t *c) { return ta::create_thermostat_running_state(c, 0); });
+    ensure(th, TA::PIHeatingDemand::Id, [](cluster_t *c) {
+        return attribute::create(c, TA::PIHeatingDemand::Id, ATTRIBUTE_FLAG_NONE, esp_matter_uint8(0));
+    });
+    ensure(th, TA::TemperatureSetpointHold::Id, [](cluster_t *c) { return ta::create_temperature_setpoint_hold(c, 0); });
+    ensure(th, TA::TemperatureSetpointHoldDuration::Id,
+           [](cluster_t *c) { return ta::create_temperature_setpoint_hold_duration(c, nullable<uint16_t>()); });
 
     cluster::thermostat_user_interface_configuration::config_t ui;
     cluster::thermostat_user_interface_configuration::create(ep, &ui, CLUSTER_FLAG_SERVER);
 
     cluster_t *bdbi = cluster::get(ep, BridgedDeviceBasicInformation::Id);
-    char uid[24];
-    snprintf(uid, sizeof uid, "heatmiser-stat-%u", v.cfg.addr);
-    cluster::bridged_device_basic_information::attribute::create_node_label(bdbi, (char *)v.cfg.name,
-                                                                            (uint16_t)strlen(v.cfg.name));
-    cluster::bridged_device_basic_information::attribute::create_unique_id(bdbi, uid, (uint16_t)strlen(uid));
+    if (bdbi && !attribute::get(bdbi, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id)) {
+        char name[ZONE_NAME_MAX + 1];
+        snprintf(name, sizeof name, "%s", v.cfg.name);
+        cluster::bridged_device_basic_information::attribute::create_node_label(bdbi, name, (uint16_t)strlen(name));
+    }
     return endpoint::set_parent_endpoint(ep, s_aggregator);
 }
 
@@ -280,15 +295,19 @@ void add_zone(int i, const zone_view_t &v)
 {
     zone_ep_t &z = s_zone[i];
     const uint8_t flags = ENDPOINT_FLAG_DESTROYABLE | ENDPOINT_FLAG_BRIDGE;
+    endpoint::bridged_node::config_t bn;
+    bn.bridged_device_basic_information.reachable = v.link != HM_LINK_OFFLINE;
+    snprintf(bn.bridged_device_basic_information.unique_id, sizeof bn.bridged_device_basic_information.unique_id,
+             "heatmiser-stat-%u", v.cfg.addr);
     endpoint_t *ep = NULL;
     if (v.cfg.endpoint) {
-        ep = endpoint::resume(s_node, flags, v.cfg.endpoint, NULL);
+        ep = endpoint::bridged_node::resume(s_node, &bn, flags, v.cfg.endpoint, NULL);
         if (!ep) {
             ESP_LOGW(TAG, "zone %u: endpoint %u could not be restored; making a new one", v.cfg.addr, v.cfg.endpoint);
         }
     }
     if (!ep) {
-        ep = endpoint::create(s_node, flags, NULL);
+        ep = endpoint::bridged_node::create(s_node, &bn, flags, NULL);
     }
     if (!ep) {
         ESP_LOGE(TAG, "zone %u: no endpoint (too many?)", v.cfg.addr);
@@ -358,9 +377,8 @@ void sync_task(void *arg)
     unsigned n = 0;
     for (;;) {
         dirty |= zone_store_take_dirty_for(ZONE_READER_MATTER);
-        if (dirty) {
-        }
-        if (lock::chip_stack_lock(portMAX_DELAY) == lock::SUCCESS) {
+        {
+            lock::ScopedChipStackLock lk(portMAX_DELAY);
             if (dirty) {
                 sync(dirty);
                 dirty = 0;
@@ -368,7 +386,6 @@ void sync_task(void *arg)
             if (++n % 2 == 0) {
                 refresh_status();
             }
-            lock::chip_stack_unlock();
         }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -381,8 +398,6 @@ void sync_task(void *arg)
 extern "C" esp_err_t matter_bridge_start(void)
 {
     node::config_t nc;
-    snprintf(nc.root_node.basic_information.node_label, sizeof nc.root_node.basic_information.node_label,
-             "Heatmiser bridge");
     s_node = node::create(&nc, attr_cb, identify_cb);
     if (!s_node) {
         ESP_LOGE(TAG, "node create failed");
@@ -402,10 +417,10 @@ extern "C" esp_err_t matter_bridge_start(void)
     s_running = true;
 
     /* Restore every saved zone's endpoint now, before a controller looks. */
-    if (lock::chip_stack_lock(portMAX_DELAY) == lock::SUCCESS) {
+    {
+        lock::ScopedChipStackLock lk(portMAX_DELAY);
         sync(0xFFFFFFFFu);
         refresh_status();
-        lock::chip_stack_unlock();
     }
     zone_store_take_dirty_for(ZONE_READER_MATTER);
     xTaskCreate(sync_task, "mt_sync", 4096, NULL, 4, NULL);
@@ -470,20 +485,19 @@ extern "C" esp_err_t matter_bridge_open_window(uint16_t seconds)
     if (!s_running) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (lock::chip_stack_lock(portMAX_DELAY) != lock::SUCCESS) {
-        return ESP_FAIL;
-    }
-    auto &cwm = chip::Server::GetInstance().GetCommissioningWindowManager();
     CHIP_ERROR ce = CHIP_NO_ERROR;
-    if (!cwm.IsCommissioningWindowOpen()) {
-        ce = cwm.OpenBasicCommissioningWindow(chip::System::Clock::Seconds16(seconds),
-                                              chip::CommissioningWindowAdvertisement::kAllSupported);
+    {
+        lock::ScopedChipStackLock lk(portMAX_DELAY);
+        auto &cwm = chip::Server::GetInstance().GetCommissioningWindowManager();
+        if (!cwm.IsCommissioningWindowOpen()) {
+            ce = cwm.OpenBasicCommissioningWindow(chip::System::Clock::Seconds32(seconds),
+                                                  chip::CommissioningWindowAdvertisement::kAllSupported);
     }
     if (ce == CHIP_NO_ERROR) {
         s_window_until_us = esp_timer_get_time() + (int64_t)seconds * 1000000;
         refresh_status();
     }
-    lock::chip_stack_unlock();
+    }
     if (ce != CHIP_NO_ERROR) {
         ESP_LOGW(TAG, "pairing window not opened: %" CHIP_ERROR_FORMAT, ce.Format());
         return ESP_FAIL;
@@ -497,12 +511,12 @@ extern "C" esp_err_t matter_bridge_remove_fabric(uint8_t index)
     if (!s_running) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (lock::chip_stack_lock(portMAX_DELAY) != lock::SUCCESS) {
-        return ESP_FAIL;
+    CHIP_ERROR ce;
+    {
+        lock::ScopedChipStackLock lk(portMAX_DELAY);
+        ce = chip::Server::GetInstance().GetFabricTable().Delete(index);
+        refresh_status();
     }
-    CHIP_ERROR ce = chip::Server::GetInstance().GetFabricTable().Delete(index);
-    refresh_status();
-    lock::chip_stack_unlock();
     if (ce != CHIP_NO_ERROR) {
         ESP_LOGW(TAG, "fabric %u not removed: %" CHIP_ERROR_FORMAT, index, ce.Format());
         return ESP_FAIL;
