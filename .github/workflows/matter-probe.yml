@@ -1,0 +1,31 @@
+name: Matter probe (temporary)
+on:
+  push:
+    branches: [claude/project-thread-mzits8]
+    paths: [tools/matter_probe/**, .github/workflows/matter-probe.yml]
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s https://components.espressif.com/api/components/espressif/esp_matter | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          for v in d['versions'][:25]:
+              deps={x.get('name'):x.get('spec') for x in v.get('dependencies',[])}
+              print(v['version'], v.get('created_at','')[:10], deps)
+          "
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        idf: [v5.4.1, v6.1.1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ matrix.idf }}
+          target: esp32s3
+          path: .
+          command: ./tools/matter_probe/probe.sh
