@@ -2,12 +2,12 @@
 
 Firmware for a Waveshare ESP32-S3-Touch-LCD-7 that acts as the single RS485
 master for Heatmiser V3 thermostats (PRT-N and PRT/HW-N) and shows them on its
-touchscreen; a later milestone presents them as Matter thermostats.
+touchscreen and to Matter controllers as thermostats.
 
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 3, the touchscreen (gate passed)
+## Status: milestone 4, Matter (built, bench gate pending)
 
 | Part | State |
 | --- | --- |
@@ -18,7 +18,9 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `zone_store`: saved zone list and names in NVS, a live view of each stat (including its programme), pending writes with failure notices, hot water boost, clock sync, holiday for all, bus counters and frame trace | Done; the view, programme helpers and saved format are host tested |
 | `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Done, bench proven (milestone 3 soak) |
 | `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
-| `net`: Wi-Fi station, SNTP clock, timezone | Built |
+| `net`: Wi-Fi station, SNTP clock, timezone (Matter drives Wi-Fi when it runs) | Built |
+| `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Built on ESP-IDF 5.4.1 and 6.1.1; mapping host tested |
+| Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Pending; see [bench-milestone4.md](docs/bench-milestone4.md) |
 | Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
 
 Milestone 1 (bus bring-up) passed its gate on 17 Nov 2026 and milestone 2

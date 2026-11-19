@@ -438,15 +438,19 @@ static void refresh_status(void)
     o.running = true;
     auto &cwm = chip::Server::GetInstance().GetCommissioningWindowManager();
     o.window_open = cwm.IsCommissioningWindowOpen();
+    /* The first controller pairs over Bluetooth. Bluetooth is freed once the
+     * bridge is on a fabric, so later ones find it on the network. */
+    const auto flags = chip::Server::GetInstance().GetFabricTable().FabricCount() == 0
+                           ? chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE)
+                           : chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kOnNetwork);
     chip::MutableCharSpan qr(o.qr, sizeof o.qr - 1);
-    if (GetQRCode(qr, chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE)) == CHIP_NO_ERROR) {
+    if (GetQRCode(qr, flags) == CHIP_NO_ERROR) {
         o.qr[qr.size()] = 0;
     } else {
         o.qr[0] = 0;
     }
     chip::MutableCharSpan mc(o.manual, sizeof o.manual - 1);
-    if (GetManualPairingCode(mc, chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE)) ==
-        CHIP_NO_ERROR) {
+    if (GetManualPairingCode(mc, flags) == CHIP_NO_ERROR) {
         o.manual[mc.size()] = 0;
     } else {
         o.manual[0] = 0;
