@@ -1,5 +1,30 @@
 # Bench: milestone 3, the touchscreen
 
+## Bench results (19 Nov 2026)
+
+**Gate passed, on a shortened soak of 15 h 40 min.** Firmware d3baecc (the
+Copper screens), drift test pattern on, Wi-Fi joined, house bus polling.
+
+| Check | Result |
+| --- | --- |
+| Picture drift | None. The frame and the four corner squares were in place in the start and end photos, `drift_marks=0` all run, and nothing looked wrong at any check |
+| Resets | None: one `HMBRIDGE-BOOT` (power on), uptime 15 h 40 min at the end |
+| Wi-Fi | Up all run, 0 disconnects, RSSI -48 to -64 dBm; 12 of 55,800 pings lost (0.02 %) |
+| Flash load | 1,860 NVS writes, 0 failures |
+| Internal RAM | Lowest free 58,176 bytes, unchanged from the first minute to the end (no leak) |
+| Display | About 38 frames a second, steady, 2.1 million frames |
+
+The run was stopped at 15 h 40 min rather than 24 h. Drift on this panel
+shows up in the first hours under Wi-Fi and flash load, and the low-water mark
+for internal RAM did not move after the first minute, so the remaining hours
+would add little.
+
+Along the way: stat 2 answered a scan at 15 h 20 min, was added back, and
+confirmed every write sent to it afterwards. It had been offline since
+milestone 2, so it is back in service. Several scans run back to back kept
+stat 1 from being polled for long enough to mark it offline once; it was back
+within a minute.
+
 Milestone 3 puts the stats on the screen. The board now boots into a
 dashboard of zone tiles driven by the poller, with a detail screen per zone
 hot water, schedule, rename and settings screens, and a zones screen to

@@ -7,7 +7,7 @@ touchscreen; a later milestone presents them as Matter thermostats.
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 3, the touchscreen (on the bench)
+## Status: milestone 3, the touchscreen (gate passed)
 
 | Part | State |
 | --- | --- |
@@ -16,15 +16,17 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time | Done, bench proven (milestone 1) |
 | `hm_poller`: the bus task running `hm_sched` on the board | Done, bench proven (milestone 2) |
 | `zone_store`: saved zone list and names in NVS, a live view of each stat (including its programme), pending writes with failure notices, hot water boost, clock sync, holiday for all, bus counters and frame trace | Done; the view, programme helpers and saved format are host tested |
-| `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Built; first run on the board due |
+| `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Done, bench proven (milestone 3 soak) |
 | `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
 | `net`: Wi-Fi station, SNTP clock, timezone | Built |
-| Gate: no drift during a 24 h soak with Wi-Fi on | Due; see [bench-milestone3.md](docs/bench-milestone3.md) |
+| Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
 
 Milestone 1 (bus bring-up) passed its gate on 17 Nov 2026 and milestone 2
-(poller and writes) on 18 Nov 2026 on 11 of 12 stats; see
-[bench-bringup.md](docs/bench-bringup.md#bench-results-17-nov-2026) and
-[bench-milestone2.md](docs/bench-milestone2.md#bench-results-18-nov-2026).
+(poller and writes) on 18 Nov 2026 on 11 of 12 stats, and milestone 3 (the
+touchscreen) on 19 Nov 2026; see
+[bench-bringup.md](docs/bench-bringup.md#bench-results-17-nov-2026),
+[bench-milestone2.md](docs/bench-milestone2.md#bench-results-18-nov-2026) and
+[bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026).
 
 ### Protocol notes found on the way
 
