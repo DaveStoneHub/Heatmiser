@@ -1,7 +1,6 @@
 /*
  * The zone store: the bridge's list of zones (stats) with their names, and a
- * live view of each one, between the bus task and the screen (and, from
- * milestone 4, Matter).
+ * live view of each one, between the bus task, the screen and Matter.
  *
  * - The saved list (address, model, name, endpoint ID) lives in NVS and is
  *   restored at boot; every saved zone is added to the poller.
@@ -51,7 +50,14 @@ bool zone_store_get(uint8_t addr, zone_view_t *out);
 /* Bits of the zones whose view changed since the last call, and clear them.
  * Bit 31 (ZONE_DIRTY_LIST) is set when zones were added or removed. */
 #define ZONE_DIRTY_LIST (1u << 31)
-uint32_t zone_store_take_dirty(void);
+uint32_t zone_store_take_dirty(void);   /* the screen's copy */
+
+/* Each reader has its own copy of the dirty bits. */
+typedef enum { ZONE_READER_UI = 0, ZONE_READER_MATTER, ZONE_READERS } zone_reader_t;
+uint32_t zone_store_take_dirty_for(zone_reader_t reader);
+
+/* Save the Matter endpoint ID of a zone's thermostat (0 = none yet). */
+zone_err_t zone_store_set_endpoint(uint8_t addr, uint16_t endpoint);
 
 /* Zone list. add does nothing if the zone exists. */
 zone_err_t zone_store_add(uint8_t addr);

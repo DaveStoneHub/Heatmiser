@@ -45,6 +45,34 @@ CONFIG_LV_USE_CLIB_SPRINTF=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
 CONFIG_LV_DEF_REFR_PERIOD=20
+# The Matter pairing QR code
+CONFIG_LV_USE_QRCODE=y
 # LVGL stays out of IRAM: internal RAM is kept for Wi-Fi, BLE and Matter.
 CONFIG_LV_BUILD_EXAMPLES=n
 CONFIG_LV_USE_DEMO_WIDGETS=n
+
+# ---- Matter (milestone 4) ---------------------------------------------------
+# Commissioning over BLE (NimBLE), then Matter over Wi-Fi. BLE is shut down
+# and its memory given back once the bridge is paired.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_EXT_ADV=n
+CONFIG_BT_NIMBLE_HCI_EVT_HI_BUF_COUNT=70
+CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=y
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_LWIP_IPV6_AUTOCONFIG=y
+CONFIG_MBEDTLS_HKDF_C=y
+# Internal RAM is the tight resource: Matter, mbedTLS and NimBLE allocate
+# from PSRAM.
+CONFIG_ESP_MATTER_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# The generated data model (esp-matter 1.5 and later); the bridge is written to it.
+CONFIG_ESP_MATTER_ENABLE_GENERATED_DATA_MODEL=y
+# 32 stats, the PRT/HW-N's hot water endpoint (milestone 5) and a spare.
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=34
+# The bench console owns UART0; no CHIP shell. No soft AP either.
+CONFIG_ENABLE_CHIP_SHELL=n
+CONFIG_ENABLE_WIFI_AP=n
+# Personal build: Matter test vendor ID and test attestation certificates.
+CONFIG_DEVICE_VENDOR_ID=0xFFF1
+CONFIG_DEVICE_PRODUCT_ID=0x8000

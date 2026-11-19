@@ -1,6 +1,7 @@
 /*
- * Heatmiser bridge: the RS485 poller (milestones 1 and 2) with the zone store
- * and the touchscreen (milestone 3), plus the bench console.
+ * Heatmiser bridge: the RS485 poller (milestones 1 and 2) with the zone store,
+ * the touchscreen (milestone 3) and the Matter bridge (milestone 4), plus the
+ * bench console.
  *
  * Connect a terminal to the board's console (115200 baud) and type "help".
  */
@@ -17,6 +18,7 @@
 #include "freertos/task.h"
 #include "hm_bus.h"
 #include "hm_poller.h"
+#include "matter_bridge.h"
 #include "net.h"
 #include "nvs_flash.h"
 #include "ui.h"
@@ -57,7 +59,13 @@ void app_main(void)
         ESP_LOGE(TAG, "display failed to start: %s", esp_err_to_name(err));
     }
 
-    if (net_init() != ESP_OK) {
+    /* Matter owns Wi-Fi. The zones are restored above, so each one's saved
+     * endpoint is back before a controller can look. If Matter will not
+     * start, the bridge still runs as a local controller on its own Wi-Fi. */
+    if (matter_bridge_start() != ESP_OK) {
+        ESP_LOGE(TAG, "Matter failed to start; running as a local controller");
+    }
+    if (net_attach() != ESP_OK && net_init() != ESP_OK) {
         ESP_LOGE(TAG, "Wi-Fi failed to start");
     }
 
@@ -71,6 +79,7 @@ void app_main(void)
     soak_register_command();
     poll_register_commands();
     ui_register_commands();
+    matter_register_command();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -86,7 +95,7 @@ void app_main(void)
 #endif
 
     printf("\nHeatmiser RS485 bridge. Default stat %d, master 0x%02X.\n"
-           "Milestone 3: zone, wifi join <ssid> <password>, display soak on. Type 'help' for all.\n\n",
+           "Milestone 4: matter, zone, wifi. Type 'help' for all.\n\n",
            CONFIG_HM_BUS_DEFAULT_STAT, cfg.master_addr);
     ESP_LOGI(TAG, "console ready");
     ESP_ERROR_CHECK(esp_console_start_repl(repl));

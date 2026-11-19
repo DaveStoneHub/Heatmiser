@@ -178,7 +178,7 @@ typedef struct {
 } ui_screen_ops_t;
 
 extern const ui_screen_ops_t ui_dash_ops, ui_zone_ops, ui_sched_ops, ui_hw_ops, ui_rename_ops,
-    ui_settings_ops, ui_zones_ops, ui_diag_ops, ui_system_ops;
+    ui_settings_ops, ui_zones_ops, ui_diag_ops, ui_system_ops, ui_matter_ops;
 
 /* The zone the zone, schedule, hot water or rename screen is showing. */
 extern uint8_t ui_cur_addr;

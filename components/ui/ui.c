@@ -11,7 +11,7 @@ static const ui_screen_ops_t *const s_ops[UI_SCREEN_COUNT] = {
     [UI_SCREEN_SCHEDULE] = &ui_sched_ops,    [UI_SCREEN_HOTWATER] = &ui_hw_ops,
     [UI_SCREEN_RENAME] = &ui_rename_ops,     [UI_SCREEN_SETTINGS] = &ui_settings_ops,
     [UI_SCREEN_ZONES] = &ui_zones_ops,       [UI_SCREEN_DIAG] = &ui_diag_ops,
-    [UI_SCREEN_SYSTEM] = &ui_system_ops,
+    [UI_SCREEN_SYSTEM] = &ui_system_ops,     [UI_SCREEN_MATTER] = &ui_matter_ops,
 };
 static lv_obj_t *s_scr[UI_SCREEN_COUNT];
 static ui_screen_t s_screen = UI_SCREEN_DASH;
@@ -868,6 +868,11 @@ void ui_show_diag(void)
 void ui_show_system(void)
 {
     show(UI_SCREEN_SYSTEM);
+}
+
+void ui_show_matter(void)
+{
+    show(UI_SCREEN_MATTER);
 }
 
 static void refresh_timer(lv_timer_t *t)

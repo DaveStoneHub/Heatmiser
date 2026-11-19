@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "matter_bridge.h"
 #include "net.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -89,4 +90,33 @@ void ui_platform_factory_reset(void)
     nvs_flash_deinit();
     nvs_flash_erase();
     esp_restart();
+}
+
+void ui_platform_matter_info(ui_matter_info_t *o)
+{
+    matter_status_t st;
+    matter_bridge_status(&st);
+    memset(o, 0, sizeof *o);
+    o->running = st.running;
+    o->window_open = st.window_open;
+    o->window_left_s = st.window_left_s;
+    snprintf(o->qr, sizeof o->qr, "%s", st.qr);
+    snprintf(o->manual, sizeof o->manual, "%s", st.manual);
+    o->endpoints = st.endpoints;
+    o->fabric_count = st.fabric_count < UI_MATTER_FABRICS ? st.fabric_count : UI_MATTER_FABRICS;
+    for (int i = 0; i < o->fabric_count; i++) {
+        o->fabrics[i].index = st.fabrics[i].index;
+        o->fabrics[i].vendor = st.fabrics[i].vendor;
+        snprintf(o->fabrics[i].label, sizeof o->fabrics[i].label, "%s", st.fabrics[i].label);
+    }
+}
+
+bool ui_platform_matter_open_window(void)
+{
+    return matter_bridge_open_window(15 * 60) == ESP_OK;
+}
+
+bool ui_platform_matter_remove_fabric(uint8_t index)
+{
+    return matter_bridge_remove_fabric(index) == ESP_OK;
 }

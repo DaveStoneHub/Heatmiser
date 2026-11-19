@@ -174,7 +174,7 @@ static void screen_event(lv_event_t *e)
         ui_show_zones();
         break;
     case 1:
-        ui_toast("Matter pairing comes with milestone 4");
+        ui_show_matter();
         break;
     case 2:
         ui_show_diag();
@@ -230,7 +230,7 @@ static void reset_event(lv_event_t *e)
 {
     (void)e;
     ui_confirm("Factory reset?",
-               "The bridge forgets its zones, names, Wi-Fi and settings, then restarts. "
+               "The bridge forgets its zones, names, Wi-Fi, Matter pairings and settings, then restarts. "
                "The thermostats keep their own settings and schedules.",
                "Reset", do_reset, NULL);
 }

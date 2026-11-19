@@ -46,6 +46,26 @@ const char *ui_platform_tz(void) { return s_tz; }
 void ui_platform_set_tz(const char *posix) { s_tz = posix; }
 void ui_platform_factory_reset(void) { printf("factory reset\n"); }
 
+static bool s_matter_paired;
+void ui_platform_matter_info(ui_matter_info_t *o)
+{
+    memset(o, 0, sizeof *o);
+    o->running = true;
+    snprintf(o->qr, sizeof o->qr, "MT:Y.K9042C00KA0648G00");
+    snprintf(o->manual, sizeof o->manual, "34970112332");
+    o->endpoints = 12;
+    if (s_matter_paired) {
+        o->fabric_count = 2;
+        o->fabrics[0] = (ui_matter_fabric_t){ 1, 0x115F, "" };
+        o->fabrics[1] = (ui_matter_fabric_t){ 2, 0x1349, "" };
+    } else {
+        o->window_open = true;
+        o->window_left_s = 14 * 60 + 32;
+    }
+}
+bool ui_platform_matter_open_window(void) { return true; }
+bool ui_platform_matter_remove_fabric(uint8_t index) { (void)index; return true; }
+
 /* ---- LVGL glue ---- */
 
 static uint32_t tick_cb(void) { return s_ms; }
@@ -201,6 +221,11 @@ int main(int argc, char **argv)
     ui_show_system();
     run(1200);
     shot("23-system");
+    ui_show_matter();
+    shot("25-matter-pairing");
+    s_matter_paired = true;
+    ui_show_matter();
+    shot("26-matter-paired");
 
     ui_set_soak(true);
     ui_show_dash();
