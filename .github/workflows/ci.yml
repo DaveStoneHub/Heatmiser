@@ -43,11 +43,23 @@ jobs:
         idf: [v5.4.1, v6.1.1]
     steps:
       - uses: actions/checkout@v4
+      # connectedhomeip is about 2,000 files; keep the compiler cache between runs.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.idf }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.idf }}-
       - uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: ${{ matrix.idf }}
           target: esp32s3
           path: .
+          extra_docker_args: -e IDF_CCACHE_ENABLE=1 -e CCACHE_DIR=/app/${{ github.repository }}/.ccache -e CCACHE_MAXSIZE=2G
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.idf }}-${{ github.sha }}
 
   tools:
     name: PC tools
