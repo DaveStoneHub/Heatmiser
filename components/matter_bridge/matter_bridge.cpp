@@ -410,6 +410,9 @@ extern "C" esp_err_t matter_bridge_start(void)
         ESP_LOGE(TAG, "aggregator create failed");
         return ESP_FAIL;
     }
+    /* esp_matter logs every attribute write at info level: 11 lines per zone
+     * at boot and one for every reading. The zone lines say what matters. */
+    esp_log_level_set("esp_matter_attribute", ESP_LOG_WARN);
     ESP_LOGI(TAG, "internal RAM before start: %u free, largest block %u, DMA %u",
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
