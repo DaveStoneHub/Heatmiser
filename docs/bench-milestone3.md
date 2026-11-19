@@ -19,11 +19,11 @@ shows up in the first hours under Wi-Fi and flash load, and the low-water mark
 for internal RAM did not move after the first minute, so the remaining hours
 would add little.
 
-Along the way: stat 2 answered a scan at 15 h 20 min, was added back, and
-confirmed every write sent to it afterwards. It had been offline since
-milestone 2, so it is back in service. Several scans run back to back kept
-stat 1 from being polled for long enough to mark it offline once; it was back
-within a minute.
+Along the way: stat 2 (Emma's bedroom) came back. Its fault was in the UH1
+wiring centre, now repaired; a scan at 15 h 20 min found it, and it confirmed
+every write sent to it afterwards. All 12 stats are now on the bus. Several
+scans run back to back kept stat 1 from being polled for long enough to mark
+it offline once; it was back within a minute.
 
 Milestone 3 puts the stats on the screen. The board now boots into a
 dashboard of zone tiles driven by the poller, with a detail screen per zone
