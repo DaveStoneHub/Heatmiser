@@ -152,6 +152,40 @@ lv_obj_t *ui_caption(lv_obj_t *parent, const char *text)
     return ui_label(parent, F_CAP, C_MUTED, text);
 }
 
+void ui_label_marquee(lv_obj_t *l)
+{
+    /* Two seconds still at each end, then a slow slide; a name that fits
+     * does not move. */
+    static lv_anim_t tmpl;
+    static bool init;
+    if (!init) {
+        lv_anim_init(&tmpl);
+        lv_anim_set_repeat_count(&tmpl, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_set_reverse_delay(&tmpl, 2000);
+        lv_anim_set_repeat_delay(&tmpl, 2000);
+        tmpl.act_time = -2000;
+        init = true;
+    }
+    lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL);
+    lv_obj_set_style_anim(l, &tmpl, 0);
+    lv_obj_set_style_anim_duration(l, lv_anim_speed_clamped(25, 600, 10000), 0);
+}
+
+void ui_marquee_text(lv_obj_t *l, const char *text)
+{
+    /* Setting the same text again would restart the slide from its pause. */
+    if (strcmp(lv_label_get_text(l), text) != 0) {
+        lv_label_set_text(l, text);
+    }
+}
+
+void ui_label_dots(lv_obj_t *l)
+{
+    /* Dots only stop wrapping when the height is one line. */
+    lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+    lv_obj_set_height(l, lv_font_get_line_height(lv_obj_get_style_text_font(l, 0)));
+}
+
 lv_obj_t *ui_screen_new(void)
 {
     lv_obj_t *scr = lv_obj_create(NULL);

@@ -105,7 +105,7 @@ static void zone_refresh(uint32_t dirty)
     const bool heating = live && v.heating && mode != HM_MODE_OFF;
     const char *err = live ? zone_error_str(v.error_code) : NULL;
 
-    lv_label_set_text(s_title, v.cfg.name);
+    ui_marquee_text(s_title, v.cfg.name);
 
     /* Header state */
     lv_color_t sc = C_MUTED;
@@ -262,7 +262,7 @@ static lv_obj_t *zone_create(void)
     s_title = h.title;
     lv_obj_t *left = lv_obj_get_user_data(h.bar);
     ui_icon_btn(left, HM_ICON_PENCIL, rename_event, NULL);
-    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
+    ui_label_marquee(s_title);
     lv_obj_set_style_max_width(s_title, 330, 0);
     s_state = ui_label(h.right, F_LABEL, C_MUTED, "");
 

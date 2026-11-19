@@ -107,7 +107,9 @@ static void hw_refresh(uint32_t dirty)
 
     lv_obj_set_style_bg_color(s_left, on ? C_HEAT_BG : C_TILE, 0);
     lv_obj_set_style_border_color(s_left, on ? C_HEAT_BORDER : C_BORDER, 0);
-    lv_label_set_text_fmt(s_icon_line, HM_ICON_DROP "  %s", v.cfg.name);
+    char line[ZONE_NAME_MAX + 8];
+    snprintf(line, sizeof line, HM_ICON_DROP "  %s", v.cfg.name);
+    ui_marquee_text(s_icon_line, line);
     lv_obj_set_style_text_color(s_icon_line, on ? C_COPPER : C_MUTED, 0);
     lv_label_set_text(s_big, !live ? "--" : on ? "ON" : "OFF");
     lv_obj_set_style_text_color(s_big, on ? C_COPPER : live ? C_TEXT : C_MUTED, 0);
@@ -203,7 +205,7 @@ static lv_obj_t *hw_create(void)
     lv_obj_set_size(s_left, LEFT_W, LV_PCT(100));
     lv_obj_set_style_pad_all(s_left, 16, 0);
     s_icon_line = ui_label(s_left, F_LABEL, C_MUTED, "");
-    lv_label_set_long_mode(s_icon_line, LV_LABEL_LONG_DOT);
+    ui_label_marquee(s_icon_line);
     lv_obj_set_width(s_icon_line, LV_PCT(100));
     s_big = ui_label(s_left, &hm_bc600_150, C_TEXT, "");
     lv_obj_align(s_big, LV_ALIGN_LEFT_MID, -4, -50);

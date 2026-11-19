@@ -135,7 +135,7 @@ static void tile_build(tile_t *t, uint8_t addr, bool hw)
     }
 
     t->name = ui_label(o, F_LABEL, C_TEXT, "");
-    lv_label_set_long_mode(t->name, LV_LABEL_LONG_DOT);
+    ui_label_marquee(t->name);
     lv_obj_set_width(t->name, TILE_W - 28 - 52);
     lv_obj_align(t->name, LV_ALIGN_TOP_LEFT, 0, 0);
     t->icons = ui_label(o, &hm_icon_22, C_MUTED, "");
@@ -146,8 +146,8 @@ static void tile_build(tile_t *t, uint8_t addr, bool hw)
     t->deg = ui_label(o, &hm_bc600_30, C_TEXT, "");
     lv_obj_align_to(t->deg, t->temp, LV_ALIGN_OUT_RIGHT_TOP, 2, 4);
     t->sub = ui_label(o, F_BODY, C_MUTED, "");
-    lv_label_set_long_mode(t->sub, LV_LABEL_LONG_DOT);
     lv_obj_set_width(t->sub, TILE_W - 28);
+    ui_label_dots(t->sub);
     lv_obj_align(t->sub, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 }
 
@@ -197,7 +197,7 @@ static void tile_show_hw(tile_t *t, const zone_view_t *v)
     char buf[40];
     const bool offline = v->link == HM_LINK_OFFLINE;
     const bool on = v->have && v->hw_on && !offline;
-    lv_label_set_text(t->name, "Hot water");
+    ui_marquee_text(t->name, "Hot water");
     tile_look(t, offline ? LOOK_OFFLINE : on ? LOOK_HEAT : LOOK_PLAIN);
     lv_label_set_text(t->icons, offline ? HM_ICON_WIFI_OFF : HM_ICON_DROP);
     lv_obj_set_style_text_color(t->icons, on ? C_COPPER : C_MUTED, 0);
@@ -218,7 +218,7 @@ static void tile_show(tile_t *t, const zone_view_t *v)
     const hm_mode_t mode = zone_view_shown_mode(v);
     const bool heating = !offline && v->have && v->heating && mode != HM_MODE_OFF;
 
-    lv_label_set_text(t->name, v->cfg.name);
+    ui_marquee_text(t->name, v->cfg.name);
     if (v->have && !offline && zone_view_shown_lock(v)) {
         strcat(icons, HM_ICON_LOCK);
     }

@@ -88,8 +88,8 @@ static void row_build(row_t *r, uint8_t addr)
     lv_obj_add_flag(col, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(col, rename_event, LV_EVENT_CLICKED, (void *)(uintptr_t)addr);
     r->name = ui_label(col, F_LABEL, C_TEXT, "");
-    lv_label_set_long_mode(r->name, LV_LABEL_LONG_DOT);
     lv_obj_set_width(r->name, LV_PCT(100));
+    ui_label_marquee(r->name);
     r->sub = ui_label(col, F_BODY, C_MUTED, "");
 
     lv_obj_t *id = ui_btn(o, HM_ICON_EYE "  Identify", ident_event, (void *)(uintptr_t)addr);
@@ -110,7 +110,7 @@ static const char *model_name(const zone_view_t *v)
 static void row_show(row_t *r, const zone_view_t *v)
 {
     char t[16], sub[80];
-    lv_label_set_text(r->name, v->cfg.name);
+    ui_marquee_text(r->name, v->cfg.name);
     if (v->link == HM_LINK_OFFLINE) {
         snprintf(sub, sizeof sub, "%s, offline", model_name(v));
     } else if (!v->have) {

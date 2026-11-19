@@ -72,7 +72,7 @@ void fake_load_house(void)
     put(3, "Hall", 188, 19, HM_MODE_HEAT, false);
     put_hw(&s_z[2]);
     s_z[2].hw_on = true;
-    put(4, "Dining room", 195, 20, HM_MODE_HEAT, true);
+    put(4, "Dining room east", 195, 20, HM_MODE_HEAT, true);
     put(5, "Study", 211, 20, HM_MODE_HEAT, false);
     s_z[4].locked = true;
     put(6, "Bedroom 1", 176, 18, HM_MODE_HEAT, false);

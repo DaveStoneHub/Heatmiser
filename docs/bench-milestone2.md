@@ -10,7 +10,7 @@ removed, master 0x81.
 | Single stat on the bench (`gate 1 slow`) | PASS: 6 of 6 steps, no retries; the display followed every change |
 | House bus, stats 1 and 3-12 (10 PRT-N, 1 PRT/HW-N at address 3) | PASS: 66 of 66 steps confirmed first time, 0 retries |
 | Write plus read-back | 460 ms each; up to about 1.5 s when a poll of another stat was already queued |
-| Stat 2 | Not answering; judged to be a faulty stat or damaged wiring. Left out of the gate for now |
+| Stat 2 | Not answering; judged to be a faulty stat or damaged wiring. Left out of the gate for now. (Later: a wiring fault in the UH1 wiring centre, repaired 19 Nov 2026; it now answers) |
 
 **The Touchpad must be physically disconnected.** On the first house run the
 Touchpad was still wired in, in its "shutdown" mode. Every stat acked every
