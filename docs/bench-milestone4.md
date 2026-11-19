@@ -153,8 +153,6 @@ control them.
 - Matter screen, **Remove** beside a controller (or `matter remove
   <fabric>`) makes the bridge forget it. The app will then show the
   thermostats as not responding; delete the bridge there too.
-- After removing the last controller, reset the board so the first pairing
-  can use Bluetooth again.
 - Removing a zone from the zones screen removes its thermostat from every
   controller. Adding it back gives it a new endpoint, so it comes back
   without its room. Factory reset forgets the zones, Wi-Fi and all Matter pairings.

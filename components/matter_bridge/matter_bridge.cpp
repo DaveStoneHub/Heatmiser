@@ -446,8 +446,9 @@ static void refresh_status(void)
     o.running = true;
     auto &cwm = chip::Server::GetInstance().GetCommissioningWindowManager();
     o.window_open = cwm.IsCommissioningWindowOpen();
-    /* The first controller pairs over Bluetooth. Bluetooth is freed once the
-     * bridge is on a fabric, so later ones find it on the network. */
+    /* The first controller pairs over Bluetooth, which also carries the Wi-Fi
+     * credentials. Once the bridge is on a fabric it is on Wi-Fi, and later
+     * controllers find it on the network. */
     const auto flags = chip::Server::GetInstance().GetFabricTable().FabricCount() == 0
                            ? chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE)
                            : chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kOnNetwork);
