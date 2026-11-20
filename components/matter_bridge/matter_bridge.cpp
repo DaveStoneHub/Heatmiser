@@ -22,6 +22,14 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+/* With BLE only for commissioning, a paired bridge panics at every boot:
+ * esp_matter shuts BLE down before NimBLE has started, and CHIP's DeinitBLE
+ * then reads the host it never set up. sdkconfig.defaults turns it off; an
+ * sdkconfig from before that keeps it on, so stop the build instead. */
+#if CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING
+#error "CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING is on, from an old sdkconfig: delete sdkconfig and build again"
+#endif
+
 #if __has_include(<setup_payload/OnboardingCodesUtil.h>)
 #include <setup_payload/OnboardingCodesUtil.h>
 #else
