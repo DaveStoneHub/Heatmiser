@@ -137,6 +137,33 @@ static esp_err_t panel_init(void)
     return esp_lcd_panel_init(s_panel);
 }
 
+/* The RGB driver's interrupt, which refills the bounce buffers, runs on the
+ * core that creates the panel. Create it on core 1 so Wi-Fi, Bluetooth and
+ * Matter (all on core 0) cannot hold it off; a late refill shows as torn or
+ * repeated lines. */
+typedef struct {
+    TaskHandle_t caller;
+    esp_err_t err;
+} panel_job_t;
+
+static void panel_task(void *arg)
+{
+    panel_job_t *job = arg;
+    job->err = panel_init();
+    xTaskNotifyGive(job->caller);
+    vTaskDelete(NULL);
+}
+
+static esp_err_t panel_init_on_core1(void)
+{
+    panel_job_t job = { .caller = xTaskGetCurrentTaskHandle(), .err = ESP_FAIL };
+    if (xTaskCreatePinnedToCore(panel_task, "lcd_init", 4096, &job, 5, NULL, 1) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    return job.err;
+}
+
 static esp_err_t touch_init(esp_lcd_touch_handle_t *tp)
 {
     esp_lcd_panel_io_handle_t io = NULL;
@@ -161,7 +188,7 @@ static void on_flush_event(lv_event_t *e)
 esp_err_t board_display_init(lv_display_t **disp, lv_indev_t **touch)
 {
     ESP_RETURN_ON_ERROR(expander_init(), TAG, "io expander");
-    ESP_RETURN_ON_ERROR(panel_init(), TAG, "panel");
+    ESP_RETURN_ON_ERROR(panel_init_on_core1(), TAG, "panel");
     ESP_RETURN_ON_ERROR(touch_reset(), TAG, "touch reset");
     esp_lcd_touch_handle_t tp = NULL;
     esp_err_t terr = touch_init(&tp);
