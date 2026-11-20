@@ -210,6 +210,9 @@ void push(int i, const zone_view_t &v)
         snprintf(z.name, sizeof z.name, "%s", v.cfg.name);
         esp_matter_attr_val_t a = esp_matter_char_str(z.name, (uint16_t)strlen(z.name));
         put_val(ep, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id, &a);
+        /* Some controllers (Aqara) name a bridged device from ProductName
+         * rather than NodeLabel, so carry the zone name in both. */
+        put_val(ep, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::ProductName::Id, &a);
     }
     if (all || m.local_null != o.local_null || m.local_t != o.local_t) {
         esp_matter_attr_val_t a = m.local_null ? esp_matter_nullable_int16(nullable<int16_t>())
@@ -295,6 +298,17 @@ esp_err_t build_thermostat(endpoint_t *ep, const zone_view_t &v)
         char name[ZONE_NAME_MAX + 1];
         snprintf(name, sizeof name, "%s", v.cfg.name);
         cluster::bridged_device_basic_information::attribute::create_node_label(bdbi, name, (uint16_t)strlen(name));
+    }
+    if (bdbi && !attribute::get(bdbi, BridgedDeviceBasicInformation::Attributes::VendorName::Id)) {
+        char vendor[] = "Heatmiser";
+        attribute::create(bdbi, BridgedDeviceBasicInformation::Attributes::VendorName::Id, ATTRIBUTE_FLAG_NONE,
+                          esp_matter_char_str(vendor, (uint16_t)strlen(vendor)));
+    }
+    if (bdbi && !attribute::get(bdbi, BridgedDeviceBasicInformation::Attributes::ProductName::Id)) {
+        char name[ZONE_NAME_MAX + 1];
+        snprintf(name, sizeof name, "%s", v.cfg.name);
+        attribute::create(bdbi, BridgedDeviceBasicInformation::Attributes::ProductName::Id, ATTRIBUTE_FLAG_NONE,
+                          esp_matter_char_str(name, (uint16_t)strlen(name)), 32); /* room for renames */
     }
     return endpoint::set_parent_endpoint(ep, s_aggregator);
 }
