@@ -19,4 +19,9 @@ idf_build_get_property(build_components BUILD_COMPONENTS)
 if("espressif__esp_matter" IN_LIST build_components)
   idf_component_get_property(matter_lib espressif__esp_matter COMPONENT_LIB)
   target_compile_options(${matter_lib} PRIVATE -Wno-error=stringop-truncation -Wno-error=stringop-overflow)
+  # The bridge's own name in a controller (Basic Information VendorName and
+  # ProductName); the Matter SDK's defaults are TEST_VENDOR and TEST_PRODUCT.
+  target_compile_definitions(${matter_lib} PRIVATE
+    "CHIP_DEVICE_CONFIG_DEVICE_VENDOR_NAME=\"Heatmiser\""
+    "CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_NAME=\"Heatmiser Bridge\"")
 endif()
