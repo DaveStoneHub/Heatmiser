@@ -374,9 +374,9 @@ esp_err_t build_thermostat(endpoint_t *ep, const zone_view_t &v)
 /* Turn a fresh bridged node endpoint into the hot water switch. */
 esp_err_t build_hw(endpoint_t *ep)
 {
-    endpoint::on_off_plugin_unit::config_t pc;
+    endpoint::on_off_plug_in_unit::config_t pc;
     pc.on_off.on_off = false;
-    esp_err_t e = endpoint::on_off_plugin_unit::add(ep, &pc);
+    esp_err_t e = endpoint::on_off_plug_in_unit::add(ep, &pc);
     if (e != ESP_OK) {
         return e;
     }
