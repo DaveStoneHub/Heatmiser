@@ -116,8 +116,7 @@ static esp_err_t panel_init(void)
             .vsync_front_porch = 8,
             .flags.pclk_active_neg = 1,
         },
-        /* RGB565: both IDF 5.x (bits_per_pixel) and 6.x (in_color_format)
-         * default the pixel format from a 16-line bus, so set neither. */
+        /* RGB565: in_color_format defaults from a 16-line bus. */
         .data_width = 16,
         .num_fbs = 2, /* LVGL draws into one while the panel streams the other */
         .bounce_buffer_size_px = BOARD_LCD_H_RES * CONFIG_BOARD_LCD_BOUNCE_LINES,

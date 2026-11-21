@@ -1,4 +1,4 @@
-# Heatmiser Matter bridge firmware (ESP-IDF 5.x).
+# Heatmiser Matter bridge firmware (ESP-IDF 6.x).
 # RS485 poller, zone store and touchscreen.
 cmake_minimum_required(VERSION 3.16)
 

@@ -19,7 +19,7 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Done, bench proven (milestone 3 soak) |
 | `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
 | `net`: Wi-Fi station, SNTP clock, timezone (Matter drives Wi-Fi when it runs) | Built |
-| `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Built on ESP-IDF 5.4.1 and 6.1.1; mapping host tested |
+| `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Built on ESP-IDF 6.1.1; mapping host tested |
 | Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Pending; see [bench-milestone4.md](docs/bench-milestone4.md) |
 | Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
 
@@ -69,7 +69,7 @@ It fetches LVGL 9.4.0 from GitHub (or pass `-DLVGL_DIR=` a local checkout).
 
 ## Firmware
 
-ESP-IDF 5.4 or later; CI builds with 5.4.1 and 6.1.1. LVGL, esp_lvgl_port and the GT911 driver come from the
+ESP-IDF 6.1 or later; CI builds with 6.1.1. LVGL, esp_lvgl_port and the GT911 driver come from the
 ESP component registry on the first build:
 
 ```
@@ -83,3 +83,9 @@ The console is on UART0 at 115200, which is the board's USB-C port marked
 
 CI runs the host tests, the UI preview (screenshots are kept as a build
 artifact), an ESP-IDF build and a check of the PC tools on every pull request.
+The firmware build is skipped when a change only touches documentation
+(Markdown files or `docs/`). It runs on the self-hosted runner (labels
+`self-hosted`, `linux`; Linux or WSL2 with Docker) in Espressif's
+`espressif/idf:v6.1.1` image, and keeps its compiler cache and the component
+manager's downloads in `_work/_heatmiser-ci-cache` on the runner between runs.
+Pull requests from forks never run on that runner.
