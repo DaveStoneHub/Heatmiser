@@ -105,8 +105,9 @@ time the bridge is found over Wi-Fi rather than Bluetooth.
 In the Home app: **+**, **Add Accessory**, scan the code, **Add Anyway** at
 the uncertified warning. Put each thermostat in its room.
 
-The bridge's Matter screen should now list two controllers (Aqara and Apple
-Home), and `matter` should show 2 controllers.
+The bridge's Matter screen should now list three controllers: Aqara, Apple
+Home, and "Apple (iPhone keychain)" (vendor 0x1384), a second fabric iOS
+adds for the phone itself. `matter` shows all three.
 
 ## 4. Use it, both ways, in both apps
 
@@ -126,7 +127,7 @@ For two or three zones, including stat 2 (Emma's bedroom):
 ## 5. Reboot and rescan (the gate)
 
 1. Press the reset button. After about 30 s both apps should show every
-   thermostat again, in its room, responding. Run `matter`: the same 2
+   thermostat again, in its room, responding. Run `matter`: the same 3
    controllers and the same `ep` numbers as before.
 2. Power cycle the board at the supply and check the same again.
 3. Rescan: sliders icon, **Zones and scan**, **Scan the bus**. When it

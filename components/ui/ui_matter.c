@@ -19,6 +19,7 @@ static const char *vendor_name(uint16_t v)
     switch (v) {
     case 0x115F: return "Aqara";
     case 0x1349: return "Apple Home";
+    case 0x1384: return "Apple (iPhone keychain)";
     case 0x6006: return "Google Home";
     case 0x1217: return "Amazon Alexa";
     case 0x110A: return "SmartThings";
