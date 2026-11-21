@@ -10,6 +10,12 @@
  *   through the zone store; the attributes then follow what the stat
  *   reports, so a write the stat does not take is undone in the controller.
  *
+ * A PRTHW also gets a second bridged endpoint, an On/Off Plug-in Unit named
+ * "Hot water" (milestone 5). On boosts the water for MM_HW_BOOST_MIN and Off
+ * holds it off until the timer period ends (zone_store_hw_switch()), so a
+ * controller can never leave it forced on or off for good. Its endpoint ID
+ * is saved too.
+ *
  * Commissioning is over BLE with the test DAC (vendor 0xFFF1), and the
  * Matter stack owns Wi-Fi: call net_attach() after matter_bridge_start().
  */
@@ -42,6 +48,7 @@ typedef struct {
     char     qr[48];
     char     manual[24];
     uint16_t endpoints;             /* bridged thermostats */
+    uint16_t hw_endpoints;          /* bridged hot water switches (PRTHW) */
     uint8_t  fabric_count;
     matter_fabric_t fabrics[MATTER_FABRICS_MAX];
 } matter_status_t;
@@ -54,6 +61,8 @@ esp_err_t matter_bridge_remove_fabric(uint8_t index);
 
 /* The thermostat endpoint of a zone, 0 if none. */
 uint16_t matter_bridge_endpoint(uint8_t addr);
+/* The hot water endpoint of a PRTHW zone, 0 if none. */
+uint16_t matter_bridge_hw_endpoint(uint8_t addr);
 
 /* Print endpoints, fabrics and the pairing codes on the console. */
 void matter_bridge_print(void);

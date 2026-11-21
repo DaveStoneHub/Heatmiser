@@ -4,6 +4,7 @@
 #include "test_util.h"
 #include "zone_store.h"
 #include "zone_view.h"
+#include "hm_write.h"
 
 /* PRT-N, 5/2 mode: set 21 C, air 20.5 C, heating on, holiday 0x0102 h,
  * hold 90 min, frost 12 C, frost protection byte 0x01 (disabled). */
@@ -274,8 +275,107 @@ static void test_programme(void)
     CHECK_EQ(zone_hw_timer_next(on, off, 18 * 60, &on_after), -1);
 }
 
+static void hw_view(zone_view_t *v)
+{
+    /* Both programme days: on 06:00-08:00 and 17:00-22:00. */
+    memset(v, 0, sizeof *v);
+    v->cfg.addr = 3;
+    v->link = HM_LINK_ONLINE;
+    v->have = true;
+    v->is_prthw = true;
+    v->hw_timer_days = 2;
+    const hm_period_t on[4] = { { 6, 0, 0 }, { 17, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    const hm_period_t off[4] = { { 8, 0, 0 }, { 22, 0, 0 }, { 24, 0, 0 }, { 24, 0, 0 } };
+    memcpy(v->hw_on_at[0], on, sizeof on);
+    memcpy(v->hw_off_at[0], off, sizeof off);
+    memcpy(v->hw_on_at[1], on, sizeof on);
+    memcpy(v->hw_off_at[1], off, sizeof off);
+}
+
+static void test_hw_switch_plan(void)
+{
+    zone_view_t v;
+    zone_hw_plan_t p;
+    hw_view(&v);
+
+    /* Timer off (Mon 12:00), water off: On boosts, Off does nothing. */
+    CHECK(zone_hw_switch_plan(&v, true, 1, 12 * 60, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FORCE_ON);
+    CHECK_EQ(p.mode, ZONE_HW_BOOST);
+    CHECK_EQ(p.minutes, 60);
+    CHECK(!zone_hw_switch_plan(&v, false, 1, 12 * 60, 60, &p));
+
+    /* Timer on (Mon 07:15): On does nothing, Off holds it off until 08:00. */
+    v.hw_on = true;
+    CHECK(!zone_hw_switch_plan(&v, true, 1, 7 * 60 + 15, 60, &p));
+    CHECK(zone_hw_switch_plan(&v, false, 1, 7 * 60 + 15, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FORCE_OFF);
+    CHECK_EQ(p.mode, ZONE_HW_OFF);
+    CHECK_EQ(p.minutes, 45);
+
+    /* Held off while the timer is on: On hands it back to the timer. */
+    v.hw_on = false;
+    v.hw_mode = ZONE_HW_OFF;
+    CHECK(zone_hw_switch_plan(&v, true, 1, 7 * 60 + 15, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FOLLOW_TIMER);
+    CHECK_EQ(p.mode, ZONE_HW_TIMER);
+    CHECK_EQ(p.minutes, 0);
+    CHECK(!zone_hw_switch_plan(&v, false, 1, 7 * 60 + 15, 60, &p));
+
+    /* Boosting with the timer off: On does nothing, Off goes back to the timer. */
+    v.hw_mode = ZONE_HW_BOOST;
+    v.hw_on = true;
+    CHECK(!zone_hw_switch_plan(&v, true, 1, 12 * 60, 60, &p));
+    CHECK(zone_hw_switch_plan(&v, false, 1, 12 * 60, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FOLLOW_TIMER);
+
+    /* Forced on from the screen, then Off from Matter in a timer period
+     * (Saturday 21:00): held off until 22:00. */
+    v.hw_mode = ZONE_HW_ON;
+    CHECK(zone_hw_switch_plan(&v, false, 6, 21 * 60, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FORCE_OFF);
+    CHECK_EQ(p.minutes, 60);
+
+    /* A period on to the end of the day: held off until midnight. */
+    v.hw_off_at[0][1].hour = 24;
+    v.hw_mode = ZONE_HW_TIMER;
+    CHECK(zone_hw_switch_plan(&v, false, 2, 23 * 60, 60, &p));
+    CHECK_EQ(p.minutes, 60);
+
+    /* No clock: Off forces off for the boost length, never for good. */
+    CHECK(zone_hw_switch_plan(&v, false, 0, 0, 60, &p));
+    CHECK_EQ(p.cmd, HM_HW_FORCE_OFF);
+    CHECK_EQ(p.minutes, 60);
+}
+
+static void test_hw_blob(void)
+{
+    const zone_hw_saved_t in[2] = { { 3, ZONE_HW_BOOST, 1795000000u }, { 9, ZONE_HW_ON, 0 } };
+    zone_hw_saved_t out[HM_SCHED_MAX_STATS];
+    uint8_t blob[ZONE_HW_BLOB_MAX];
+    size_t n = zone_hw_encode(in, 2, blob, sizeof blob);
+    CHECK_EQ(n, 2 + 2 * ZONE_HW_ENTRY_SIZE);
+    CHECK_EQ(zone_hw_decode(blob, n, out, HM_SCHED_MAX_STATS), 2);
+    CHECK_EQ(out[0].addr, 3);
+    CHECK_EQ(out[0].mode, ZONE_HW_BOOST);
+    CHECK(out[0].end_utc == 1795000000u);
+    CHECK_EQ(out[1].addr, 9);
+    CHECK_EQ(out[1].mode, ZONE_HW_ON);
+    CHECK(out[1].end_utc == 0);
+    CHECK_EQ(zone_hw_decode(blob, n - 1, out, HM_SCHED_MAX_STATS), -1);
+    blob[0] = 2;
+    CHECK_EQ(zone_hw_decode(blob, n, out, HM_SCHED_MAX_STATS), -1);
+    blob[0] = ZONE_HW_BLOB_VERSION;
+    blob[2] = 0; /* address 0 */
+    CHECK_EQ(zone_hw_decode(blob, n, out, HM_SCHED_MAX_STATS), -1);
+    CHECK_EQ(zone_hw_encode(in, 0, blob, sizeof blob), 2);
+    CHECK_EQ(zone_hw_decode(blob, 2, out, HM_SCHED_MAX_STATS), 0);
+}
+
 void test_zone_all(void)
 {
+    test_hw_switch_plan();
+    test_hw_blob();
     test_programme();
     test_view_from_stat();
     test_pending();

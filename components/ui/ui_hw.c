@@ -117,7 +117,7 @@ static void hw_refresh(uint32_t dirty)
     const char *mode = "Following timer";
     switch (v.hw_mode) {
     case ZONE_HW_ON:    mode = "Forced on"; break;
-    case ZONE_HW_OFF:   mode = "Forced off"; break;
+    case ZONE_HW_OFF:   mode = v.boost_left_min ? "Held off" : "Forced off"; break;
     case ZONE_HW_BOOST: mode = "Boost"; break;
     default: break;
     }
@@ -135,6 +135,9 @@ static void hw_refresh(uint32_t dirty)
     if (v.hw_mode == ZONE_HW_BOOST && v.boost_left_min) {
         lv_label_set_text(s_next_cap, "Boost ends in");
         lv_label_set_text_fmt(s_next, "%u min", v.boost_left_min);
+    } else if (v.hw_mode == ZONE_HW_OFF && v.boost_left_min) {
+        lv_label_set_text(s_next_cap, "Timer resumes in");
+        lv_label_set_text_fmt(s_next, "%u min", v.boost_left_min);
     } else if (v.hw_mode == ZONE_HW_ON || v.hw_mode == ZONE_HW_OFF) {
         lv_label_set_text(s_next_cap, "Until you choose");
         lv_label_set_text(s_next, "Resume timer");
@@ -146,11 +149,14 @@ static void hw_refresh(uint32_t dirty)
         lv_label_set_text(s_next_cap, "Timer");
         lv_label_set_text(s_next, live && v.hw_timer_days ? "No more today" : "--");
     }
-    if (v.hw_mode != ZONE_HW_ON && v.hw_mode != ZONE_HW_OFF) {
+    if (v.hw_mode != ZONE_HW_ON && !(v.hw_mode == ZONE_HW_OFF && !v.boost_left_min)) {
         lv_obj_set_style_text_font(s_next, &hm_bc600_44, 0);
     }
 
-    if (v.hw_mode == ZONE_HW_BOOST) {
+    if (v.hw_mode == ZONE_HW_BOOST && !v.boost_left_min) {
+        lv_label_set_text(s_boost_state, "Boost, waiting for the clock");
+        lv_obj_set_style_text_color(s_boost_state, C_COPPER, 0);
+    } else if (v.hw_mode == ZONE_HW_BOOST) {
         lv_label_set_text_fmt(s_boost_state, "Boost, %u min left", v.boost_left_min);
         lv_obj_set_style_text_color(s_boost_state, C_COPPER, 0);
     } else {

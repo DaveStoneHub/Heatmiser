@@ -1,6 +1,6 @@
 /*
  * Heatmiser bridge: the RS485 poller (milestones 1 and 2) with the zone store,
- * the touchscreen (milestone 3) and the Matter bridge (milestone 4), plus the
+ * the touchscreen (milestone 3) and the Matter bridge (milestones 4 and 5), plus the
  * bench console.
  *
  * Connect a terminal to the board's console (115200 baud) and type "help".
@@ -95,7 +95,7 @@ void app_main(void)
 #endif
 
     printf("\nHeatmiser RS485 bridge. Default stat %d, master 0x%02X.\n"
-           "Milestone 4: matter, zone, wifi. Type 'help' for all.\n\n",
+           "Milestone 5: matter, hw, zone, wifi. Type 'help' for all.\n\n",
            CONFIG_HM_BUS_DEFAULT_STAT, cfg.master_addr);
     ESP_LOGI(TAG, "console ready");
     ESP_ERROR_CHECK(esp_console_start_repl(repl));

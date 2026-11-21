@@ -7,7 +7,7 @@ touchscreen and to Matter controllers as thermostats.
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 4, Matter (gate passed)
+## Status: milestone 5, hot water on Matter (on the bench)
 
 | Part | State |
 | --- | --- |
@@ -15,11 +15,13 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `hm_sched`: write queue first, round-robin full-DCB poll, read-back confirmation, retries, offline back-off, scan (pure C) | Done, host tested against simulated stats |
 | `hm_bus`: UART1 at 4800 8N1, TX GPIO16 / RX GPIO15, one transaction at a time | Done, bench proven (milestone 1) |
 | `hm_poller`: the bus task running `hm_sched` on the board | Done, bench proven (milestone 2) |
-| `zone_store`: saved zone list and names in NVS, a live view of each stat (including its programme), pending writes with failure notices, hot water boost, clock sync, holiday for all, bus counters and frame trace | Done; the view, programme helpers and saved format are host tested |
+| `zone_store`: saved zone list and names in NVS, a live view of each stat (including its programme), pending writes with failure notices, hot water boost and overrides that survive a restart, clock sync, holiday for all, bus counters and frame trace | Done; the view, programme helpers and saved format are host tested |
 | `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Done, bench proven (milestone 3 soak) |
 | `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
 | `net`: Wi-Fi station, SNTP clock, timezone (Matter drives Wi-Fi when it runs) | Built |
 | `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Done, bench proven with Aqara Hub M3 and Apple Home (milestone 4); mapping host tested |
+| `matter_bridge`, milestone 5: the PRT/HW-N's hot water as a bridged On/Off Plug-in Unit ("Hot water") with a saved endpoint ID. On boosts for 60 min, Off holds the water off until the timer period ends; never forced for good | Built; switch logic host tested. Bench: [bench-milestone5.md](docs/bench-milestone5.md) |
+| Gate: a boost survives a reboot and ends on time | To do on the bench |
 | Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Passed 21 Nov 2026; see [bench-milestone4.md](docs/bench-milestone4.md#bench-results-21-nov-2026) |
 | Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
 

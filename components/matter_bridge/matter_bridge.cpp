@@ -1,6 +1,7 @@
 /*
  * Matter bridge: root node, Aggregator, and one bridged Thermostat endpoint
- * per zone (design doc, "Matter bridge endpoint model").
+ * per zone, plus an On/Off Plug-in Unit for a PRTHW's hot water (design doc,
+ * "Matter bridge endpoint model" and "Hot water").
  *
  * Threads:
  * - The CHIP task calls attr_cb for every attribute change. A change from a
@@ -60,7 +61,14 @@ struct zone_ep_t {
     bool        pushed;          /* last has been sent once */
     mm_thermo_t last;
     char        name[ZONE_NAME_MAX + 1];
+    /* PRTHW hot water */
+    uint16_t    hw_id;           /* 0 = no endpoint */
+    endpoint_t *hw_ep;
+    bool        hw_pushed;
+    mm_hw_t     hw_last;         /* what the OnOff attribute holds */
 };
+
+const char HW_NAME[] = "Hot water";
 
 node_t *s_node;
 endpoint_t *s_aggregator;
@@ -71,14 +79,27 @@ matter_status_t s_status;
 portMUX_TYPE s_status_mux = portMUX_INITIALIZER_UNLOCKED;
 bool s_local;                    /* we are updating an attribute ourselves */
 
-int zone_of_endpoint(uint16_t id)
+int zone_of_endpoint(uint16_t id, bool *hw)
 {
     for (int i = 0; i < NZONES; i++) {
         if (s_zone[i].id && s_zone[i].id == id) {
+            *hw = false;
+            return i;
+        }
+        if (s_zone[i].hw_id && s_zone[i].hw_id == id) {
+            *hw = true;
             return i;
         }
     }
     return -1;
+}
+
+/* Whether a zone should have a hot water endpoint. Before its first read,
+ * the saved model decides, so the endpoint is back before a controller
+ * looks. */
+bool wants_hw(const zone_view_t &v)
+{
+    return v.have ? v.is_prthw : v.cfg.model == HM_MODEL_PRTHW;
 }
 
 /* ---- Matter -> zone store ------------------------------------------------------ */
@@ -127,6 +148,24 @@ esp_err_t controller_write(int i, uint32_t cluster, uint32_t attr, esp_matter_at
     return ESP_OK; /* identify and the rest: let the stack handle them */
 }
 
+esp_err_t controller_write_hw(int i, uint32_t cluster, uint32_t attr, esp_matter_attr_val_t *val)
+{
+    uint8_t addr = (uint8_t)(i + 1);
+    if (cluster != OnOff::Id) {
+        return ESP_OK; /* identify and the rest */
+    }
+    if (attr != OnOff::Attributes::OnOff::Id) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    const bool on = val->val.b;
+    ESP_LOGI(TAG, "stat %u: hot water %s from a controller", addr, on ? "on" : "off");
+    esp_err_t e = zone_result(zone_store_hw_switch(addr, on, MM_HW_BOOST_MIN), i, "hot water");
+    if (e == ESP_OK) {
+        s_zone[i].hw_last.on = on; /* the attribute now holds this; push() corrects it if the stat differs */
+    }
+    return e;
+}
+
 esp_err_t attr_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_t cluster_id,
                   uint32_t attribute_id, esp_matter_attr_val_t *val, void *priv)
 {
@@ -134,11 +173,12 @@ esp_err_t attr_cb(attribute::callback_type_t type, uint16_t endpoint_id, uint32_
     if (type != attribute::PRE_UPDATE || s_local) {
         return ESP_OK;
     }
-    int i = zone_of_endpoint(endpoint_id);
+    bool hw = false;
+    int i = zone_of_endpoint(endpoint_id, &hw);
     if (i < 0) {
         return ESP_OK;
     }
-    return controller_write(i, cluster_id, attribute_id, val);
+    return hw ? controller_write_hw(i, cluster_id, attribute_id, val) : controller_write(i, cluster_id, attribute_id, val);
 }
 
 esp_err_t identify_cb(identification::callback_type_t type, uint16_t endpoint_id, uint8_t effect_id,
@@ -254,6 +294,24 @@ void push(int i, const zone_view_t &v)
     z.pushed = true;
 }
 
+void push_hw(int i, const zone_view_t &v)
+{
+    zone_ep_t &z = s_zone[i];
+    mm_hw_t m;
+    mm_hw_from_view(&v, &m);
+    const bool all = !z.hw_pushed;
+    if (all || m.reachable != z.hw_last.reachable) {
+        esp_matter_attr_val_t a = esp_matter_bool(m.reachable);
+        put_val(z.hw_id, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id, &a);
+    }
+    if (all || m.on != z.hw_last.on) {
+        esp_matter_attr_val_t a = esp_matter_bool(m.on);
+        put_val(z.hw_id, OnOff::Id, OnOff::Attributes::OnOff::Id, &a);
+    }
+    z.hw_last = m;
+    z.hw_pushed = true;
+}
+
 /* Optional attributes the bridge reports, made only if the data model has
  * not made them already. */
 void ensure(cluster_t *c, uint32_t attr, attribute_t *(*make)(cluster_t *))
@@ -313,6 +371,86 @@ esp_err_t build_thermostat(endpoint_t *ep, const zone_view_t &v)
     return endpoint::set_parent_endpoint(ep, s_aggregator);
 }
 
+/* Turn a fresh bridged node endpoint into the hot water switch. */
+esp_err_t build_hw(endpoint_t *ep)
+{
+    endpoint::on_off_plugin_unit::config_t pc;
+    pc.on_off.on_off = false;
+    esp_err_t e = endpoint::on_off_plugin_unit::add(ep, &pc);
+    if (e != ESP_OK) {
+        return e;
+    }
+    char name[] = "Hot water";
+    char vendor[] = "Heatmiser";
+    cluster_t *bdbi = cluster::get(ep, BridgedDeviceBasicInformation::Id);
+    namespace BA = BridgedDeviceBasicInformation::Attributes;
+    if (bdbi && !attribute::get(bdbi, BA::NodeLabel::Id)) {
+        cluster::bridged_device_basic_information::attribute::create_node_label(bdbi, name, (uint16_t)strlen(name));
+    }
+    if (bdbi && !attribute::get(bdbi, BA::VendorName::Id)) {
+        attribute::create(bdbi, BA::VendorName::Id, ATTRIBUTE_FLAG_NONE,
+                          esp_matter_char_str(vendor, (uint16_t)strlen(vendor)));
+    }
+    /* Aqara names a bridged device from ProductName (milestone 4). */
+    if (bdbi && !attribute::get(bdbi, BA::ProductName::Id)) {
+        attribute::create(bdbi, BA::ProductName::Id, ATTRIBUTE_FLAG_NONE,
+                          esp_matter_char_str(name, (uint16_t)strlen(name)));
+    }
+    return endpoint::set_parent_endpoint(ep, s_aggregator);
+}
+
+/* Give zone i its hot water endpoint, reusing its saved ID. */
+void add_hw(int i, const zone_view_t &v)
+{
+    zone_ep_t &z = s_zone[i];
+    const uint8_t flags = ENDPOINT_FLAG_DESTROYABLE | ENDPOINT_FLAG_BRIDGE;
+    endpoint::bridged_node::config_t bn;
+    bn.bridged_device_basic_information.reachable = v.link != HM_LINK_OFFLINE;
+    snprintf(bn.bridged_device_basic_information.unique_id, sizeof bn.bridged_device_basic_information.unique_id,
+             "heatmiser-hw-%u", v.cfg.addr);
+    endpoint_t *ep = NULL;
+    if (v.cfg.hw_endpoint) {
+        ep = endpoint::bridged_node::resume(s_node, &bn, flags, v.cfg.hw_endpoint, NULL);
+        if (!ep) {
+            ESP_LOGW(TAG, "stat %u: hot water endpoint %u could not be restored; making a new one", v.cfg.addr,
+                     v.cfg.hw_endpoint);
+        }
+    }
+    if (!ep) {
+        ep = endpoint::bridged_node::create(s_node, &bn, flags, NULL);
+    }
+    if (!ep) {
+        ESP_LOGE(TAG, "stat %u: no hot water endpoint (too many?)", v.cfg.addr);
+        return;
+    }
+    if (build_hw(ep) != ESP_OK || endpoint::enable(ep) != ESP_OK) {
+        ESP_LOGE(TAG, "stat %u: hot water endpoint failed", v.cfg.addr);
+        endpoint::destroy(s_node, ep);
+        return;
+    }
+    z.hw_ep = ep;
+    z.hw_id = endpoint::get_id(ep);
+    z.hw_pushed = false;
+    ESP_LOGI(TAG, "stat %u hot water is endpoint %u", v.cfg.addr, z.hw_id);
+    if (z.hw_id != v.cfg.hw_endpoint) {
+        zone_store_set_hw_endpoint(v.cfg.addr, z.hw_id); /* only touches NVS on a change */
+    }
+}
+
+void remove_hw(int i)
+{
+    zone_ep_t &z = s_zone[i];
+    if (!z.hw_ep) {
+        return;
+    }
+    ESP_LOGI(TAG, "stat %d hot water removed; endpoint %u retired", i + 1, z.hw_id);
+    endpoint::destroy(s_node, z.hw_ep);
+    z.hw_ep = NULL;
+    z.hw_id = 0;
+    z.hw_pushed = false;
+    memset(&z.hw_last, 0, sizeof z.hw_last);
+}
+
 /* Give zone i an endpoint, reusing its saved ID. */
 void add_zone(int i, const zone_view_t &v)
 {
@@ -357,6 +495,7 @@ void remove_zone(int i)
     if (!z.ep) {
         return;
     }
+    remove_hw(i);
     ESP_LOGI(TAG, "zone %d removed; endpoint %u retired", i + 1, z.id);
     endpoint::destroy(s_node, z.ep);
     memset(&z, 0, sizeof z);
@@ -386,6 +525,29 @@ void sync(uint32_t dirty)
             continue;
         }
         push(i, v);
+    }
+    /* Hot water after every thermostat, so the thermostats' saved endpoints
+     * are all back before a new endpoint number is handed out. */
+    for (int i = 0; i < NZONES; i++) {
+        zone_view_t v;
+        if (!s_zone[i].ep || !zone_store_get((uint8_t)(i + 1), &v)) {
+            continue;
+        }
+        if (!wants_hw(v)) {
+            if (s_zone[i].hw_ep && v.have) {
+                remove_hw(i); /* the stat at this address is not a PRTHW any more */
+            }
+            continue;
+        }
+        if (!s_zone[i].hw_ep) {
+            add_hw(i, v);
+            if (!s_zone[i].hw_ep) {
+                continue;
+            }
+        } else if (!(dirty & (1u << i))) {
+            continue;
+        }
+        push_hw(i, v);
     }
 }
 
@@ -493,6 +655,7 @@ static void refresh_status(void)
     }
     for (int i = 0; i < NZONES; i++) {
         o.endpoints += s_zone[i].ep ? 1 : 0;
+        o.hw_endpoints += s_zone[i].hw_ep ? 1 : 0;
     }
     for (const auto &fb : chip::Server::GetInstance().GetFabricTable()) {
         if (o.fabric_count >= MATTER_FABRICS_MAX) {
@@ -570,6 +733,11 @@ extern "C" uint16_t matter_bridge_endpoint(uint8_t addr)
     return addr >= 1 && addr <= NZONES ? s_zone[addr - 1].id : 0;
 }
 
+extern "C" uint16_t matter_bridge_hw_endpoint(uint8_t addr)
+{
+    return addr >= 1 && addr <= NZONES ? s_zone[addr - 1].hw_id : 0;
+}
+
 extern "C" void matter_bridge_print(void)
 {
     matter_status_t st;
@@ -597,6 +765,26 @@ extern "C" void matter_bridge_print(void)
                    m.local_t / 100, (m.local_t < 0 ? -m.local_t : m.local_t) % 100, m.heat_setpoint / 100,
                    m.heat_setpoint % 100, m.system_mode == MM_SYSTEM_MODE_HEAT ? "Heat" : "Off",
                    m.running_state ? "  heating" : "", m.keypad_lockout ? "  locked" : "");
+        }
+    }
+    if (st.hw_endpoints) {
+        printf("%u hot water endpoint(s):\n", st.hw_endpoints);
+    }
+    for (int i = 0; i < NZONES; i++) {
+        if (s_zone[i].hw_id) {
+            const mm_hw_t &m = s_zone[i].hw_last;
+            zone_view_t v;
+            const char *mode = "";
+            char left[24] = "";
+            if (zone_store_get((uint8_t)(i + 1), &v)) {
+                mode = v.hw_mode == ZONE_HW_BOOST ? "boost" : v.hw_mode == ZONE_HW_ON ? "forced on"
+                       : v.hw_mode == ZONE_HW_OFF ? "forced off" : "timer";
+                if (v.boost_left_min && (v.hw_mode == ZONE_HW_BOOST || v.hw_mode == ZONE_HW_OFF)) {
+                    snprintf(left, sizeof left, ", %u min left", v.boost_left_min);
+                }
+            }
+            printf("  ep %-3u stat %-2d %-16s %s  %s  (%s%s)\n", s_zone[i].hw_id, i + 1, HW_NAME,
+                   m.reachable ? "reachable  " : "unreachable", m.on ? "on " : "off", mode, left);
         }
     }
 }

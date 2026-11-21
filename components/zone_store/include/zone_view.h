@@ -27,6 +27,10 @@ typedef struct {
     uint8_t  model;                 /* last seen, 0xFF = never read */
     uint16_t endpoint;              /* Matter endpoint ID, 0 until milestone 4 */
     char     name[ZONE_NAME_MAX + 1];
+    /* PRTHW: the hot water endpoint's Matter ID, 0 = none yet. Saved on its
+     * own (NVS key "hwep<addr>"), not in the zone list blob, so the list
+     * keeps version 1 and older firmware can still read it. */
+    uint16_t hw_endpoint;
 } zone_cfg_t;
 
 /* A write the user asked for that the stat has not confirmed yet. */
@@ -79,7 +83,9 @@ typedef struct {
     /* The stat's own clock, as last read. wday 1-7 = Mon-Sun, 0 = none. */
     uint8_t    clk_wday, clk_hour, clk_min;
 
-    /* Hot water as the bridge last set it (ZONE_HW_*), and boost time left. */
+    /* Hot water as the bridge last set it (ZONE_HW_*), and the minutes left
+     * of a timed override: a boost, or a forced off that ends when the timer
+     * period ends. 0 = no end time (or not known yet after a restart). */
     uint8_t    hw_mode;
     uint16_t   boost_left_min;
 
@@ -89,7 +95,7 @@ typedef struct {
 /* Hot water modes the bridge can put a PRTHW in. */
 #define ZONE_HW_TIMER   0           /* following its timer */
 #define ZONE_HW_ON      1           /* forced on until changed */
-#define ZONE_HW_OFF     2           /* forced off until changed */
+#define ZONE_HW_OFF     2           /* forced off until changed, or until boost_left_min runs out */
 #define ZONE_HW_BOOST   3           /* forced on, back to the timer when the boost ends */
 
 /* Fill the live part of *v from a stat's scheduler state. cfg and pend are
@@ -145,6 +151,24 @@ bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m);
  * *on_after says which. */
 int zone_hw_timer_next(const hm_period_t on[4], const hm_period_t off[4], int m, bool *on_after);
 
+/* What a plain hot water on/off switch (Matter's On/Off) should do, so the
+ * water is never left forced on or off with no end:
+ * - On: nothing if the water is on already (timer, boost or forced on);
+ *   back to the timer if it is held off while the timer is on; otherwise a
+ *   boost of boost_min minutes.
+ * - Off: nothing if already forced off; if the timer has the water on now,
+ *   forced off until that timer period ends; otherwise back to the timer.
+ * wday (1-7 = Mon-Sun) and minute (0-1439) are the time now, wday 0 if not
+ * known; then Off forces off for boost_min minutes. Returns false when there
+ * is nothing to do. */
+typedef struct {
+    int      cmd;                   /* HM_HW_FOLLOW_TIMER / FORCE_ON / FORCE_OFF */
+    uint8_t  mode;                  /* ZONE_HW_* */
+    unsigned minutes;               /* end of the override, 0 = none */
+} zone_hw_plan_t;
+bool zone_hw_switch_plan(const zone_view_t *v, bool on, int wday, int minute, unsigned boost_min,
+                         zone_hw_plan_t *out);
+
 /* True if the periods are in time order with the unused ones last, as the
  * stat needs them. */
 bool zone_periods_ok(const hm_period_t p[4]);
@@ -166,6 +190,26 @@ size_t zone_list_encode(const zone_cfg_t *z, size_t n, uint8_t *out, size_t cap)
 /* Returns the number of zones decoded, or -1 if the blob is not a version
  * this firmware understands or is malformed. */
 int zone_list_decode(const uint8_t *in, size_t len, zone_cfg_t *z, size_t cap);
+
+/* ---- saved hot water overrides (NVS blob "zones/hw") ---------------------
+ * Version 1: [version=1][count] then count entries of
+ * [addr][mode][end, UTC seconds, 4 bytes little endian]. Only stats whose
+ * hot water is not simply following its timer are saved. end 0 = no end
+ * time, or one that started before the clock was set. A ZONE_HW_TIMER entry
+ * with an end is a "back to the timer" write still to be retried. */
+#define ZONE_HW_BLOB_VERSION  1
+#define ZONE_HW_ENTRY_SIZE    6
+#define ZONE_HW_BLOB_MAX      (2 + HM_SCHED_MAX_STATS * ZONE_HW_ENTRY_SIZE)
+
+typedef struct {
+    uint8_t  addr;
+    uint8_t  mode;                  /* ZONE_HW_* */
+    uint32_t end_utc;
+} zone_hw_saved_t;
+
+size_t zone_hw_encode(const zone_hw_saved_t *e, size_t n, uint8_t *out, size_t cap);
+/* Number of entries, or -1 if the blob is not understood. */
+int zone_hw_decode(const uint8_t *in, size_t len, zone_hw_saved_t *e, size_t cap);
 
 #ifdef __cplusplus
 }

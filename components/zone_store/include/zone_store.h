@@ -58,6 +58,8 @@ uint32_t zone_store_take_dirty_for(zone_reader_t reader);
 
 /* Save the Matter endpoint ID of a zone's thermostat (0 = none yet). */
 zone_err_t zone_store_set_endpoint(uint8_t addr, uint16_t endpoint);
+/* The same for a PRTHW's hot water endpoint. */
+zone_err_t zone_store_set_hw_endpoint(uint8_t addr, uint16_t endpoint);
 
 /* Zone list. add does nothing if the zone exists. */
 zone_err_t zone_store_add(uint8_t addr);
@@ -72,9 +74,15 @@ zone_err_t zone_store_set_hold(uint8_t addr, unsigned minutes);
 zone_err_t zone_store_set_hw(uint8_t addr, int cmd);  /* HM_HW_FOLLOW_TIMER etc. */
 
 /* Hot water on for this many minutes, then back to the timer (0 ends a
- * boost now). The bridge times the boost; if it restarts mid-boost, the stat
- * goes back to its timer at boot. */
+ * boost now). The bridge times the boost and saves its end; after a restart
+ * the boost carries on once the clock is set (SNTP), and ends on time. If the
+ * clock is not set within 5 minutes, the water goes back to its timer. */
 zone_err_t zone_store_hw_boost(uint8_t addr, unsigned minutes);
+
+/* Hot water from a plain on/off switch (Matter): see zone_hw_switch_plan().
+ * On boosts for boost_min minutes; Off holds the water off until the timer
+ * period ends, or puts it back on the timer. */
+zone_err_t zone_store_hw_switch(uint8_t addr, bool on, unsigned boost_min);
 
 /* One programme day (see zone_view.h): four comfort levels, or four hot
  * water on/off pairs. Periods must be in time order, unused ones (hour 24)
