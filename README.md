@@ -7,7 +7,7 @@ touchscreen and to Matter controllers as thermostats.
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document.
 
-## Status: milestone 4, Matter (built, bench gate pending)
+## Status: milestone 4, Matter (gate passed)
 
 | Part | State |
 | --- | --- |
@@ -19,16 +19,18 @@ wire protocol is Heatmiser's V3.9 RS485 protocol document.
 | `board`: Waveshare 7" RGB panel with bounce buffers, GT911 touch, CH422G backlight, LVGL 9 via esp_lvgl_port | Done, bench proven (milestone 3 soak) |
 | `ui`: the Copper design. Dashboard, zone detail, hot water with boost, schedule and hot water timer editing, rename keyboard, settings, zones and scan, bus diagnostics, system, drift test pattern | Built; desktop preview renders every screen ([docs/screens](docs/screens/)) |
 | `net`: Wi-Fi station, SNTP clock, timezone (Matter drives Wi-Fi when it runs) | Built |
-| `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Built on ESP-IDF 6.1.1; mapping host tested |
-| Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Pending; see [bench-milestone4.md](docs/bench-milestone4.md) |
+| `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Done, bench proven with Aqara Hub M3 and Apple Home (milestone 4); mapping host tested |
+| Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Passed 21 Nov 2026; see [bench-milestone4.md](docs/bench-milestone4.md#bench-results-21-nov-2026) |
 | Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
 
 Milestone 1 (bus bring-up) passed its gate on 17 Nov 2026 and milestone 2
 (poller and writes) on 18 Nov 2026 on 11 of 12 stats, and milestone 3 (the
-touchscreen) on 19 Nov 2026; see
+touchscreen) on 19 Nov 2026, and milestone 4 (Matter, with the Aqara Hub M3
+and Apple Home together) on 21 Nov 2026; see
 [bench-bringup.md](docs/bench-bringup.md#bench-results-17-nov-2026),
-[bench-milestone2.md](docs/bench-milestone2.md#bench-results-18-nov-2026) and
-[bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026).
+[bench-milestone2.md](docs/bench-milestone2.md#bench-results-18-nov-2026),
+[bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) and
+[bench-milestone4.md](docs/bench-milestone4.md#bench-results-21-nov-2026).
 
 ### Protocol notes found on the way
 

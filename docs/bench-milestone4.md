@@ -1,5 +1,48 @@
 # Bench: milestone 4, Matter
 
+## Bench results (21 Nov 2026)
+
+**Gate passed.** Firmware 370e1ae (main at 341ffa4, PR #16), ESP-IDF 6.1 on
+Windows, all 12 stats on the bus, Aqara Hub M3 and Apple Home (with a home
+hub) on the bridge at the same time.
+
+| Check | Result |
+| --- | --- |
+| Pair Aqara Hub M3 | Paired over Bluetooth after "Uncertified Accessory", **Add anyway**. All 12 thermostats added, named after their zones; the bridge shows as "Heatmiser Bridge" |
+| Add Apple Home | Paired over Wi-Fi with **Pair another controller**, **Add Anyway**. All 12 thermostats added; Siri works too |
+| Control from both | Setpoint changes from Aqara and from Apple Home reach the stat, which starts heating |
+| Reset | 3 controllers, endpoints 2 to 13 unchanged, all reachable; both apps kept every room and still control them |
+| Power cycle | The same |
+| Rescan the bus | The same: no thermostat lost or duplicated, same endpoint numbers, both apps still in control |
+
+Controllers after pairing: fabric 4, vendor 0x1384 (the iPhone's keychain,
+which iOS adds alongside Apple Home); fabric 5, 0x115F Aqara ("Greenways");
+fabric 6, 0x1349 Apple Home ("My Home").
+
+Found and fixed on the way:
+
+- **Windows build:** ninja stopped with "CreateProcess: The parameter is
+  incorrect" (command line over 32,767 characters). Fixed by response files
+  on Windows (PR #13).
+- **Matter would not start:** Wi-Fi got only 14 of 16 static receive buffers
+  once the screen was up. Fewer static buffers and the Wi-Fi and lwIP fast
+  paths out of IRAM; 100,783 bytes of internal RAM free before Matter starts,
+  largest block 57,344 (PR #14).
+- **Tearing and repeated lines while Aqara added the thermostats:** the
+  screen's bounce-buffer refill ran on core 0 with Wi-Fi, Bluetooth and
+  Matter. The panel is now created on core 1 (PR #14).
+- **Boot loop once paired:** "BLE only for commissioning" made the Matter
+  SDK shut down a Bluetooth stack that had not started. Turned off, and the
+  build now refuses an old sdkconfig that has it on (PRs #14 and #15).
+- **Names in Aqara:** the bridge showed as TEST_PRODUCT and each thermostat
+  as 04654001 and so on. The bridge now has a vendor and product name, and
+  each thermostat carries its zone name as its product name too, which Aqara
+  uses (PR #16; re-pair to pick it up).
+
+Notes: Aqara offers setpoints in half degrees; the stat holds whole degrees,
+so the bridge rounds and the app follows. The Matter SDK logs two harmless
+"could not get feature flags" lines per thermostat at boot.
+
 Milestone 4 puts every zone on Matter. The board is now a Matter bridge: a
 root node, an Aggregator, and one bridged Thermostat endpoint per saved zone.
 A controller sees one thermostat per room, named as on the screen, with the
