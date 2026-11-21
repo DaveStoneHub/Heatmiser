@@ -54,6 +54,7 @@ void ui_platform_matter_info(ui_matter_info_t *o)
     snprintf(o->qr, sizeof o->qr, "MT:Y.K9042C00KA0648G00");
     snprintf(o->manual, sizeof o->manual, "34970112332");
     o->endpoints = 12;
+    o->hw_endpoints = 1;
     if (s_matter_paired) {
         o->fabric_count = 2;
         o->fabrics[0] = (ui_matter_fabric_t){ 1, 0x115F, "" };

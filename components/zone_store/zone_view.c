@@ -1,5 +1,6 @@
 #include "zone_view.h"
 #include "zone_store.h"
+#include "hm_write.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -344,6 +345,92 @@ int zone_list_decode(const uint8_t *in, size_t len, zone_cfg_t *z, size_t cap)
         if (!z[i].name[0]) {
             zone_default_name(z[i].addr, z[i].model, z[i].name, sizeof z[i].name);
         }
+    }
+    return (int)n;
+}
+
+bool zone_hw_switch_plan(const zone_view_t *v, bool on, int wday, int minute, unsigned boost_min,
+                         zone_hw_plan_t *out)
+{
+    const bool known = wday >= 1 && wday <= 7 && minute >= 0 && minute < 24 * 60 && v->hw_timer_days > 0;
+    bool timer_on = false;
+    int day = 0;
+    if (known) {
+        day = zone_prog_day(v->hw_timer_days, wday);
+        timer_on = zone_hw_timer_on(v->hw_on_at[day], v->hw_off_at[day], minute);
+    }
+    out->cmd = HM_HW_FOLLOW_TIMER;
+    out->mode = ZONE_HW_TIMER;
+    out->minutes = 0;
+    if (on) {
+        if (v->hw_mode == ZONE_HW_BOOST || v->hw_mode == ZONE_HW_ON) {
+            return false;
+        }
+        if (v->hw_mode == ZONE_HW_TIMER && v->hw_on) {
+            return false;
+        }
+        if (v->hw_mode == ZONE_HW_OFF && known && timer_on) {
+            return true; /* held off while the timer is on: let the timer have it */
+        }
+        out->cmd = HM_HW_FORCE_ON;
+        out->mode = ZONE_HW_BOOST;
+        out->minutes = boost_min;
+        return true;
+    }
+    if (v->hw_mode == ZONE_HW_OFF) {
+        return false;
+    }
+    if (!known || timer_on) {
+        out->cmd = HM_HW_FORCE_OFF;
+        out->mode = ZONE_HW_OFF;
+        out->minutes = boost_min;
+        if (known) {
+            bool on_after = false;
+            int next = zone_hw_timer_next(v->hw_on_at[day], v->hw_off_at[day], minute, &on_after);
+            int end = next >= 0 && !on_after ? next : 24 * 60; /* on to the end of the day */
+            out->minutes = (unsigned)(end - minute);
+        }
+        return true;
+    }
+    /* The timer has it off: going back to the timer turns it off. */
+    return !(v->hw_mode == ZONE_HW_TIMER && !v->hw_on);
+}
+
+size_t zone_hw_encode(const zone_hw_saved_t *e, size_t n, uint8_t *out, size_t cap)
+{
+    if (n > HM_SCHED_MAX_STATS || cap < 2 + n * ZONE_HW_ENTRY_SIZE) {
+        return 0;
+    }
+    out[0] = ZONE_HW_BLOB_VERSION;
+    out[1] = (uint8_t)n;
+    uint8_t *p = out + 2;
+    for (size_t i = 0; i < n; i++, p += ZONE_HW_ENTRY_SIZE) {
+        p[0] = e[i].addr;
+        p[1] = e[i].mode;
+        for (int b = 0; b < 4; b++) {
+            p[2 + b] = (uint8_t)(e[i].end_utc >> (8 * b));
+        }
+    }
+    return (size_t)(p - out);
+}
+
+int zone_hw_decode(const uint8_t *in, size_t len, zone_hw_saved_t *e, size_t cap)
+{
+    if (len < 2 || in[0] != ZONE_HW_BLOB_VERSION) {
+        return -1;
+    }
+    size_t n = in[1];
+    if (n > HM_SCHED_MAX_STATS || n > cap || len != 2 + n * ZONE_HW_ENTRY_SIZE) {
+        return -1;
+    }
+    const uint8_t *p = in + 2;
+    for (size_t i = 0; i < n; i++, p += ZONE_HW_ENTRY_SIZE) {
+        if (p[0] < HM_STAT_ADDR_MIN || p[0] > HM_STAT_ADDR_MAX || p[1] > ZONE_HW_BOOST) {
+            return -1;
+        }
+        e[i].addr = p[0];
+        e[i].mode = p[1];
+        e[i].end_utc = (uint32_t)p[2] | ((uint32_t)p[3] << 8) | ((uint32_t)p[4] << 16) | ((uint32_t)p[5] << 24);
     }
     return (int)n;
 }

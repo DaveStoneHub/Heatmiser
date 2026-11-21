@@ -34,6 +34,16 @@ typedef struct {
     uint8_t  display_mode;           /* 0 Celsius, 1 Fahrenheit */
 } mm_thermo_t;
 
+/* Hot water (PRTHW) as an On/Off Plug-in Unit. */
+#define MM_HW_BOOST_MIN 60           /* On from a controller boosts for this long */
+
+typedef struct {
+    bool reachable;
+    bool on;                         /* hot water on now, or as asked for */
+} mm_hw_t;
+
+void mm_hw_from_view(const zone_view_t *v, mm_hw_t *out);
+
 /* What Matter should show for a zone. Pending writes show as asked for, so a
  * controller's change does not bounce back while it is on the bus. */
 void mm_from_view(const zone_view_t *v, mm_thermo_t *out);

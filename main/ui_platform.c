@@ -103,6 +103,7 @@ void ui_platform_matter_info(ui_matter_info_t *o)
     snprintf(o->qr, sizeof o->qr, "%s", st.qr);
     snprintf(o->manual, sizeof o->manual, "%s", st.manual);
     o->endpoints = st.endpoints;
+    o->hw_endpoints = st.hw_endpoints;
     o->fabric_count = st.fabric_count < UI_MATTER_FABRICS ? st.fabric_count : UI_MATTER_FABRICS;
     for (int i = 0; i < o->fabric_count; i++) {
         o->fabrics[i].index = st.fabrics[i].index;

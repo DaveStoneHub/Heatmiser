@@ -3,6 +3,7 @@
 
 #include "matter_map.h"
 #include "test_util.h"
+#include "hm_write.h"
 
 static void base_view(zone_view_t *v)
 {
@@ -108,8 +109,41 @@ static void test_map_writes(void)
     CHECK(!mm_mode_from_system(1, &mode)); /* Auto */
 }
 
+static void test_map_hw(void)
+{
+    zone_view_t v;
+    mm_hw_t m;
+    base_view(&v);
+    v.is_prthw = true;
+    mm_hw_from_view(&v, &m);
+    CHECK(m.reachable);
+    CHECK(!m.on);
+    v.hw_on = true;
+    mm_hw_from_view(&v, &m);
+    CHECK(m.on);
+    v.pend.hw = true; /* forced off on its way */
+    v.pend.hw_cmd = HM_HW_FORCE_OFF;
+    mm_hw_from_view(&v, &m);
+    CHECK(!m.on);
+    v.pend.hw_cmd = HM_HW_FOLLOW_TIMER; /* not known until it is read back */
+    mm_hw_from_view(&v, &m);
+    CHECK(m.on);
+    v.hw_on = false;
+    v.pend.hw_cmd = HM_HW_FORCE_ON;
+    mm_hw_from_view(&v, &m);
+    CHECK(m.on);
+    v.pend.hw = false;
+    v.have = false; /* not read yet */
+    v.hw_on = true;
+    v.link = HM_LINK_OFFLINE;
+    mm_hw_from_view(&v, &m);
+    CHECK(!m.on);
+    CHECK(!m.reachable);
+}
+
 void test_matter_all(void)
 {
+    test_map_hw();
     test_map_heating();
     test_map_frost_off_offline();
     test_map_pending();

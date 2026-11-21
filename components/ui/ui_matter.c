@@ -101,7 +101,8 @@ static void matter_tick(void)
         lv_label_set_text(s_state, mi.fabric_count ? "Paired" : "Not paired");
     }
     lv_obj_set_style_text_color(s_state, mi.window_open ? C_COPPER : C_MUTED, 0);
-    lv_label_set_text_fmt(s_count, "%u thermostat%s shared", (unsigned)mi.endpoints, mi.endpoints == 1 ? "" : "s");
+    lv_label_set_text_fmt(s_count, "%u thermostat%s%s shared", (unsigned)mi.endpoints, mi.endpoints == 1 ? "" : "s",
+                          mi.hw_endpoints ? " and hot water" : "");
 
     for (int i = 0; i < UI_MATTER_FABRICS; i++) {
         if (i < mi.fabric_count) {

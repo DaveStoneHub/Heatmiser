@@ -184,8 +184,16 @@ static const char *hw_mode_str(const zone_view_t *v, char *buf, size_t cap)
     }
     switch (v->hw_mode) {
     case ZONE_HW_ON:  return "Forced on";
-    case ZONE_HW_OFF: return "Forced off";
+    case ZONE_HW_OFF:
+        if (!v->boost_left_min) {
+            return "Forced off";
+        }
+        snprintf(buf, cap, "Off for %u min", v->boost_left_min);
+        return buf;
     case ZONE_HW_BOOST:
+        if (!v->boost_left_min) {
+            return "Boost"; /* just restarted, waiting for the clock */
+        }
         snprintf(buf, cap, "Boost, %u min left", v->boost_left_min);
         return buf;
     default:          return "Following timer";

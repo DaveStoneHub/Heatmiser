@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "hm_write.h"
+
 void mm_from_view(const zone_view_t *v, mm_thermo_t *o)
 {
     memset(o, 0, sizeof *o);
@@ -55,5 +57,16 @@ bool mm_mode_from_system(uint8_t sm, hm_mode_t *out)
         return true;
     default:
         return false;
+    }
+}
+
+void mm_hw_from_view(const zone_view_t *v, mm_hw_t *o)
+{
+    o->reachable = v->link != HM_LINK_OFFLINE;
+    o->on = v->have && v->hw_on;
+    if (v->pend.hw && v->pend.hw_cmd == HM_HW_FORCE_ON) {
+        o->on = true;
+    } else if (v->pend.hw && v->pend.hw_cmd == HM_HW_FORCE_OFF) {
+        o->on = false;
     }
 }

@@ -113,6 +113,7 @@ typedef struct {
     char     qr[48];             /* "MT:..." */
     char     manual[24];         /* 11 digits */
     uint16_t endpoints;          /* bridged thermostats */
+    uint16_t hw_endpoints;       /* bridged hot water switches */
     uint8_t  fabric_count;
     ui_matter_fabric_t fabrics[UI_MATTER_FABRICS];
 } ui_matter_info_t;
