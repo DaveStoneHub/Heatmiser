@@ -34,38 +34,107 @@ jobs:
           name: ui-screenshots
           path: ui-shots/
 
-  firmware:
-    name: ESP-IDF ${{ matrix.idf }} build (esp32s3)
+  # Decides whether the firmware needs building. A change that only touches
+  # documentation (Markdown anywhere, or anything under docs/) skips it. This
+  # is a job rather than paths-ignore so the firmware check reports "skipped"
+  # instead of never appearing, which keeps required checks satisfied.
+  changes:
+    name: Detect code changes
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        idf: [v5.4.1, v6.1.1]
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
     steps:
-      # A Matter build (connectedhomeip with debug info) needs more disk than
-      # the runner has free; drop toolchains this job does not use.
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
-          df -h /
       - uses: actions/checkout@v4
-      # connectedhomeip is about 2,000 files; keep the compiler cache between runs.
-      - uses: actions/cache/restore@v4
         with:
-          path: .ccache
-          key: ccache-${{ matrix.idf }}-${{ github.sha }}
-          restore-keys: ccache-${{ matrix.idf }}-
-      - uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: ${{ matrix.idf }}
-          target: esp32s3
-          path: .
-          extra_docker_args: -e IDF_CCACHE_ENABLE=1 -e CCACHE_DIR=/app/${{ github.repository }}/.ccache -e CCACHE_MAXSIZE=2G
-      - uses: actions/cache/save@v4
-        if: always()
-        with:
-          path: .ccache
-          key: ccache-${{ matrix.idf }}-${{ github.sha }}
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A new branch, a force push or a missing base: build to be safe.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No usable base ($BASE); building."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          echo "Changed files:"; echo "$changed"
+          code=$(echo "$changed" | grep -vE '(^docs/|\.md$)' | grep -c . || true)
+          if [ "$code" -gt 0 ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Docs only; skipping the firmware build."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  firmware:
+    name: ESP-IDF v6.1.1 build (esp32s3)
+    needs: changes
+    # Self-hosted Linux runner (or WSL2). Never run code from a fork's pull
+    # request on it.
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux]
+    # One firmware build at a time on the runner; a newer push to the same
+    # branch or PR cancels the older build.
+    concurrency:
+      group: firmware-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    env:
+      IDF_VERSION: v6.1.1
+      # Kept on the runner's disk between runs, outside the workspace that
+      # checkout cleans: ESP-IDF and its tools (installed on the first run),
+      # the compiler cache, and the component manager's downloads (esp-matter
+      # brings connectedhomeip, which is large).
+      CI_CACHE: ${{ github.workspace }}/../../_heatmiser-ci-cache
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check runner prerequisites
+        run: |
+          missing=""
+          for c in git python3 flex bison gperf; do
+            command -v "$c" >/dev/null || missing="$missing $c"
+          done
+          python3 -c "import venv, ensurepip" 2>/dev/null || missing="$missing python3-venv"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing on the runner:$missing. On Debian/Ubuntu: sudo apt-get install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0"
+            exit 1
+          fi
+          command -v ccache >/dev/null || echo "::warning::ccache is not installed, so every build compiles from scratch. sudo apt-get install ccache"
+      - name: Install ESP-IDF ${{ env.IDF_VERSION }} (first run only)
+        run: |
+          set -euo pipefail
+          idf="$CI_CACHE/esp-idf-$IDF_VERSION"
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          # The stamp is written last, so an interrupted install starts again.
+          if [ ! -f "$idf/.ci-installed" ]; then
+            rm -rf "$idf"
+            mkdir -p "$CI_CACHE"
+            git clone --quiet --depth 1 --branch "$IDF_VERSION" \
+              --recurse-submodules --shallow-submodules \
+              https://github.com/espressif/esp-idf.git "$idf"
+            "$idf/install.sh" esp32s3
+            touch "$idf/.ci-installed"
+          else
+            echo "ESP-IDF $IDF_VERSION already installed at $idf"
+          fi
+      - name: Build
+        run: |
+          set -eo pipefail
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          . "$CI_CACHE/esp-idf-$IDF_VERSION/export.sh" >/dev/null
+          export IDF_COMPONENT_CACHE_PATH="$CI_CACHE/components"
+          if command -v ccache >/dev/null; then
+            export IDF_CCACHE_ENABLE=1 CCACHE_DIR="$CI_CACHE/ccache" CCACHE_MAXSIZE=5G
+          fi
+          idf.py set-target esp32s3
+          idf.py build
+          if command -v ccache >/dev/null; then ccache -s; fi
 
   tools:
     name: PC tools

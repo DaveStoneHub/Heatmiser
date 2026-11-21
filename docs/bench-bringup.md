@@ -35,7 +35,7 @@ line error also fails it.
   stat's setup features (see the PRT-N manual); it is 1 to 32.
 - A short twisted pair from the board's RS485 terminals to the stat's RS485
   terminals. Keep the board's 120 Ω terminator fitted.
-- ESP-IDF 5.4 (the Windows installer from Espressif is the easy way), and
+- ESP-IDF 6.1 (the Windows installer from Espressif is the easy way), and
   Python with `pip install pyserial` for the soak logger.
 - Optional: an oscilloscope or a USB logic analyser for cross-checking timing.
 
