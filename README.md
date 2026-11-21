@@ -85,7 +85,9 @@ CI runs the host tests, the UI preview (screenshots are kept as a build
 artifact), an ESP-IDF build and a check of the PC tools on every pull request.
 The firmware build is skipped when a change only touches documentation
 (Markdown files or `docs/`). It runs on the self-hosted runner (labels
-`self-hosted`, `linux`; Linux or WSL2 with Docker) in Espressif's
-`espressif/idf:v6.1.1` image, and keeps its compiler cache and the component
-manager's downloads in `_work/_heatmiser-ci-cache` on the runner between runs.
+`self-hosted`, `linux`; Linux or WSL2). The first run installs ESP-IDF v6.1.1
+into `_heatmiser-ci-cache` beside the runner's work folder, and later runs
+reuse it along with the compiler cache and the component manager's downloads.
+The runner needs the ESP-IDF Linux prerequisites:
+`sudo apt-get install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0`.
 Pull requests from forks never run on that runner.

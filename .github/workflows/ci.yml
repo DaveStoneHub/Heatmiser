@@ -70,8 +70,8 @@ jobs:
   firmware:
     name: ESP-IDF v6.1.1 build (esp32s3)
     needs: changes
-    # Self-hosted runner (Linux or WSL2, with Docker). Never run code from a
-    # fork's pull request on it.
+    # Self-hosted Linux runner (or WSL2). Never run code from a fork's pull
+    # request on it.
     if: >-
       needs.changes.outputs.code == 'true' &&
       (github.event_name != 'pull_request' ||
@@ -84,33 +84,57 @@ jobs:
       cancel-in-progress: true
     env:
       IDF_VERSION: v6.1.1
-      # Kept on the runner's disk between runs instead of uploaded to the
-      # Actions cache: the compiler cache, and the component manager's cache
-      # (esp-matter brings connectedhomeip, which is a large download).
+      # Kept on the runner's disk between runs, outside the workspace that
+      # checkout cleans: ESP-IDF and its tools (installed on the first run),
+      # the compiler cache, and the component manager's downloads (esp-matter
+      # brings connectedhomeip, which is large).
       CI_CACHE: ${{ github.workspace }}/../../_heatmiser-ci-cache
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare caches
+      - name: Check runner prerequisites
         run: |
-          mkdir -p "$CI_CACHE/ccache" "$CI_CACHE/components"
-          docker pull -q espressif/idf:$IDF_VERSION
+          missing=""
+          for c in git python3 flex bison gperf; do
+            command -v "$c" >/dev/null || missing="$missing $c"
+          done
+          python3 -c "import venv, ensurepip" 2>/dev/null || missing="$missing python3-venv"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing on the runner:$missing. On Debian/Ubuntu: sudo apt-get install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0"
+            exit 1
+          fi
+          command -v ccache >/dev/null || echo "::warning::ccache is not installed, so every build compiles from scratch. sudo apt-get install ccache"
+      - name: Install ESP-IDF ${{ env.IDF_VERSION }} (first run only)
+        run: |
+          set -euo pipefail
+          idf="$CI_CACHE/esp-idf-$IDF_VERSION"
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          # The stamp is written last, so an interrupted install starts again.
+          if [ ! -f "$idf/.ci-installed" ]; then
+            rm -rf "$idf"
+            mkdir -p "$CI_CACHE"
+            git clone --quiet --depth 1 --branch "$IDF_VERSION" \
+              --recurse-submodules --shallow-submodules \
+              https://github.com/espressif/esp-idf.git "$idf"
+            "$idf/install.sh" esp32s3
+            touch "$idf/.ci-installed"
+          else
+            echo "ESP-IDF $IDF_VERSION already installed at $idf"
+          fi
       - name: Build
-        # Run as the runner's own user so build output in the workspace is
-        # not root-owned, which would stop the next checkout cleaning it.
         run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -e HOME=/tmp \
-            -e IDF_CCACHE_ENABLE=1 \
-            -e CCACHE_DIR=/ccache \
-            -e CCACHE_MAXSIZE=5G \
-            -e IDF_COMPONENT_CACHE_PATH=/components \
-            -v "$GITHUB_WORKSPACE:/project" \
-            -v "$CI_CACHE/ccache:/ccache" \
-            -v "$CI_CACHE/components:/components" \
-            -w /project \
-            espressif/idf:$IDF_VERSION \
-            bash -c "idf.py set-target esp32s3 && idf.py build && ccache -s"
+          set -eo pipefail
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          . "$CI_CACHE/esp-idf-$IDF_VERSION/export.sh" >/dev/null
+          export IDF_COMPONENT_CACHE_PATH="$CI_CACHE/components"
+          if command -v ccache >/dev/null; then
+            export IDF_CCACHE_ENABLE=1 CCACHE_DIR="$CI_CACHE/ccache" CCACHE_MAXSIZE=5G
+          fi
+          idf.py set-target esp32s3
+          idf.py build
+          if command -v ccache >/dev/null; then ccache -s; fi
 
   tools:
     name: PC tools
