@@ -435,6 +435,11 @@ extern "C" esp_err_t matter_bridge_start(void)
     /* esp_matter logs every attribute write at info level: 11 lines per zone
      * at boot and one for every reading. The zone lines say what matters. */
     esp_log_level_set("esp_matter_attribute", ESP_LOG_WARN);
+    /* The Matter SDK logs every message to and from a controller (each report
+     * to a subscriber, its acknowledgement, retries) at info level. */
+    esp_log_level_set("chip[EM]", ESP_LOG_WARN);
+    esp_log_level_set("chip[IM]", ESP_LOG_WARN);
+    esp_log_level_set("chip[DMG]", ESP_LOG_WARN);
     ESP_LOGI(TAG, "internal RAM before start: %u free, largest block %u, DMA %u",
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
