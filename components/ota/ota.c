@@ -2,11 +2,13 @@
 #include "ota.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
 #include "esp_app_desc.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_log.h"
@@ -32,7 +34,8 @@ static const char *TAG = "ota";
 static SemaphoreHandle_t s_mu;
 static ota_status_t s_st;
 static TaskHandle_t s_task;
-static char s_url[512];
+static char *s_url;          /* 512 bytes in PSRAM, from ota_init */
+#define URL_MAX 512
 static bool s_check_only;
 static ota_health_fn s_healthy;
 static esp_timer_handle_t s_verify;
@@ -71,13 +74,13 @@ static void fail(const char *why)
 
 /* ---- the check: where does releases/latest redirect to? ------------------- */
 
-static char s_location[512];
+static char *s_location;     /* the same */
 
 static esp_err_t check_event(esp_http_client_event_t *e)
 {
     if (e->event_id == HTTP_EVENT_ON_HEADER && e->header_key && e->header_value &&
         strcasecmp(e->header_key, "Location") == 0) {
-        snprintf(s_location, sizeof s_location, "%s", e->header_value);
+        snprintf(s_location, URL_MAX, "%s", e->header_value);
     }
     return ESP_OK;
 }
@@ -274,7 +277,7 @@ esp_err_t ota_install(const char *url)
         lock();
         const bool busy = s_task != NULL;
         if (!busy) {
-            snprintf(s_url, sizeof s_url, "%s", url);
+            snprintf(s_url, URL_MAX, "%s", url);
         }
         unlock();
         if (busy) {
@@ -284,7 +287,7 @@ esp_err_t ota_install(const char *url)
         lock();
         const bool have = s_st.latest[0] && s_task == NULL;
         if (have) {
-            snprintf(s_url, sizeof s_url, GITHUB "%s/releases/download/%s/%s", CONFIG_HM_OTA_REPO, s_st.latest,
+            snprintf(s_url, URL_MAX, GITHUB "%s/releases/download/%s/%s", CONFIG_HM_OTA_REPO, s_st.latest,
                      CONFIG_HM_OTA_ASSET);
         }
         unlock();
@@ -330,9 +333,14 @@ static void verify_tick(void *arg)
 esp_err_t ota_init(ota_health_fn healthy)
 {
     s_mu = xSemaphoreCreateMutex();
-    if (!s_mu) {
+    s_url = heap_caps_calloc(2, URL_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_url) {
+        s_url = calloc(2, URL_MAX);
+    }
+    if (!s_mu || !s_url) {
         return ESP_ERR_NO_MEM;
     }
+    s_location = s_url + URL_MAX;
     s_healthy = healthy;
     snprintf(s_st.running, sizeof s_st.running, "%.31s", esp_app_get_description()->version);
     s_st.percent = -1;

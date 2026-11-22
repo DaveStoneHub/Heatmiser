@@ -12,9 +12,11 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -57,9 +59,11 @@ typedef struct {
 static SemaphoreHandle_t s_mu;
 static SemaphoreHandle_t s_hw_mu;   /* save_hw(), taken before s_mu */
 static bool        s_used[HM_SCHED_MAX_STATS];
-static zone_view_t s_view[HM_SCHED_MAX_STATS];
+/* The views and write ids (about 14 KB) live in PSRAM: internal RAM is the
+ * tight resource once Matter, Wi-Fi and the screen are up. */
+static zone_view_t *s_view;
 static uint32_t    s_last_ok[HM_SCHED_MAX_STATS];
-static zone_ids_t  s_ids[HM_SCHED_MAX_STATS];
+static zone_ids_t  *s_ids;
 static uint32_t    s_dirty;
 static bool        s_save_needed;
 static hm_stat_t   s_st;  /* under s_mu */
@@ -471,7 +475,15 @@ int zone_store_init(void)
 {
     s_mu = xSemaphoreCreateMutex();
     s_hw_mu = xSemaphoreCreateMutex();
-    if (!s_mu || !s_hw_mu) {
+    s_view = heap_caps_calloc(HM_SCHED_MAX_STATS, sizeof *s_view, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    s_ids = heap_caps_calloc(HM_SCHED_MAX_STATS, sizeof *s_ids, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_view) {
+        s_view = calloc(HM_SCHED_MAX_STATS, sizeof *s_view);
+    }
+    if (!s_ids) {
+        s_ids = calloc(HM_SCHED_MAX_STATS, sizeof *s_ids);
+    }
+    if (!s_mu || !s_hw_mu || !s_view || !s_ids) {
         return -1;
     }
     zone_cfg_t list[HM_SCHED_MAX_STATS];
