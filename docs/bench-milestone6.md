@@ -104,10 +104,13 @@ write: any that were more than 2 minutes out. The log shows
    `stat N: clock is 10 min out; setting it`, and the stat's display should
    show the right time again. If that stat's clock was set in the last 15
    minutes (at boot, say), allow up to 15 minutes.
-3. On a stat with a setpoint override (turn its dial up 2 degrees first),
-   repeat steps 1 and 2 on that stat. After the clock write the log should
-   show `stat N: setpoint 23 written back after the clock write`, and the
-   stat should keep the raised setpoint.
+3. Pick a stat the bridge hasn't set in the last 15 minutes. Set its clock
+   10 minutes wrong first, then straight away turn its setpoint up 2
+   degrees, all within about a minute. (Changing the clock at the stat
+   itself drops an override, so the setpoint has to go up after the clock
+   change.) After the bridge's clock write the log should show
+   `stat N: setpoint 23 written back after the clock write`, and the stat
+   should keep the raised setpoint.
 4. Run `health` and check that `clk_ok` went up by 2 and `clk_fail` is 0.
 
 The daily sync happens at 03:10, so you'll see it in the week log (section
