@@ -12,6 +12,7 @@
 #include "board.h"
 #include "display.h"
 #include "esp_console.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 #include "esp_system.h"
@@ -29,6 +30,15 @@
 
 static const char *TAG = "main";
 
+/* Internal RAM at each boot stage: Wi-Fi, BLE and Matter need what is left. */
+static void heap_mark(const char *stage)
+{
+    ESP_LOGI(TAG, "RAM after %s: internal %u free, largest block %u; PSRAM %u free", stage,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+}
+
 void app_main(void)
 {
     /* The soak logger on the PC looks for this line to spot an unexpected reset. */
@@ -41,6 +51,7 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+    heap_mark("NVS");
 
     const hm_bus_config_t cfg = HM_BUS_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(hm_bus_init(&cfg));
@@ -48,9 +59,11 @@ void app_main(void)
     if (zone_store_init() < 0) {
         ESP_LOGE(TAG, "zone store failed to start");
     }
+    heap_mark("bus and zones");
 
     /* A new firmware from an update is on trial until the bus answers. */
     ota_init(health_ok);
+    heap_mark("updates");
 
     /* The screen. A display fault must not stop the bus, so carry on without it. */
     lv_display_t *disp = NULL;
@@ -68,6 +81,7 @@ void app_main(void)
     /* Matter owns Wi-Fi. The zones are restored above, so each one's saved
      * endpoint is back before a controller can look. If Matter will not
      * start, the bridge still runs as a local controller on its own Wi-Fi. */
+    heap_mark("screen");
     if (matter_bridge_start() != ESP_OK) {
         ESP_LOGE(TAG, "Matter failed to start; running as a local controller");
     }
@@ -75,6 +89,7 @@ void app_main(void)
         ESP_LOGE(TAG, "Wi-Fi failed to start");
     }
 
+    heap_mark("Matter and Wi-Fi");
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     repl_cfg.prompt = "hm> ";
