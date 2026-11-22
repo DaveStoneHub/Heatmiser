@@ -83,7 +83,7 @@ static void system_tick(void)
 {
     ui_sys_info_t si;
     ui_platform_sys_info(&si);
-    char buf[96], clock[32];
+    char buf[200], clock[32];
     if (!si.wifi_configured) {
         snprintf(buf, sizeof buf, "Not set up. Use 'wifi join' on the console.");
     } else if (si.wifi_up) {

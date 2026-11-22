@@ -91,7 +91,7 @@ void ui_pin_ask(const char *title, const char *hint, void (*done)(const char *pi
     lv_obj_set_style_pad_gap(grid, GAP, 0);
     static const int keys[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, -2, 0, -1 };
     for (int i = 0; i < 12; i++) {
-        char t[8];
+        char t[12];
         const char *txt = t;
         if (keys[i] == -1) {
             txt = HM_ICON_BKSP;
