@@ -13,6 +13,7 @@
 #include "display.h"
 #include "esp_console.h"
 #include "esp_heap_caps.h"
+#include "esp_rom_sys.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"
 #include "esp_system.h"
@@ -30,6 +31,17 @@
 
 static const char *TAG = "main";
 
+/* Any allocation that fails, with its size and kind, and what was free. */
+static void alloc_failed(size_t size, uint32_t caps, const char *func)
+{
+    esp_rom_printf("HMBRIDGE-ALLOC-FAIL size=%u caps=0x%08x in %s: free %u largest %u (those caps), "
+                   "internal free %u largest %u\n",
+                   (unsigned)size, (unsigned)caps, func ? func : "?", (unsigned)heap_caps_get_free_size(caps),
+                   (unsigned)heap_caps_get_largest_free_block(caps),
+                   (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+}
+
 /* Internal RAM at each boot stage: Wi-Fi, BLE and Matter need what is left. */
 static void heap_mark(const char *stage)
 {
@@ -43,6 +55,7 @@ void app_main(void)
 {
     /* The soak logger on the PC looks for this line to spot an unexpected reset. */
     printf("\nHMBRIDGE-BOOT reset_reason=%d\n", (int)esp_reset_reason());
+    heap_caps_register_failed_alloc_callback(alloc_failed);
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
