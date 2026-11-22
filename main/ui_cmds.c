@@ -126,19 +126,6 @@ static int cmd_tz(int argc, char **argv)
 static int cmd_display(int argc, char **argv)
 {
     const char *sub = argc > 1 ? argv[1] : "status";
-    if (strcmp(sub, "soak") == 0 && argc > 2) {
-        bool on = strcmp(argv[2], "on") == 0;
-        if (!on && strcmp(argv[2], "off") != 0) {
-            display_soak_log("now");
-            return 0;
-        }
-        if (lvgl_port_lock(1000)) {
-            ui_set_soak(on);
-            lvgl_port_unlock();
-        }
-        printf("Display soak %s.\n", on ? "running: drift pattern on, Wi-Fi and NVS load on" : "stopped");
-        return 0;
-    }
     if (strcmp(sub, "timeout") == 0 && argc > 2) {
         int s;
         if (bench_parse_int(argv[2], 0, 0, 86400, &s)) {
@@ -159,9 +146,8 @@ static int cmd_display(int argc, char **argv)
         printf("RGB DMA restart requested: %s\n", esp_err_to_name(board_lcd_restart()));
         return 0;
     }
-    printf("Backlight %s, %" PRIu32 " frames drawn, blank after %" PRIu32 " s, soak %s\n",
-           board_backlight_is_on() ? "on" : "off", board_flush_count(), ui_blank_timeout(),
-           display_soak_running() ? "running" : "off");
+    printf("Backlight %s, %" PRIu32 " frames drawn, blank after %" PRIu32 " s\n",
+           board_backlight_is_on() ? "on" : "off", board_flush_count(), ui_blank_timeout());
     printf("Internal RAM %u free (lowest %u), PSRAM %u free\n",
            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
            (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
@@ -216,9 +202,8 @@ void ui_register_commands(void)
           .hint = "[status|join|forget]", .func = cmd_wifi },
         { .command = "tz", .help = "Show or set the timezone (POSIX TZ string)", .hint = "[tz]",
           .func = cmd_tz },
-        { .command = "display", .help = "Display: status (default), soak on|off|now, timeout <s>, "
-                                        "backlight on|off, restart",
-          .hint = "[status|soak|timeout|backlight|restart]", .func = cmd_display },
+        { .command = "display", .help = "Display: status (default), timeout <s>, backlight on|off, restart",
+          .hint = "[status|timeout|backlight|restart]", .func = cmd_display },
         { .command = "screen", .help = "Show a screen: dash, zone|schedule|timer|hotwater|rename <addr>, settings, "
                                        "zones, diag, system, matter",
           .hint = "[dash|zone|schedule|timer|hotwater|rename|settings|zones|diag|system|matter]",

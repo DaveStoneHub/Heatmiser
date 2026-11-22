@@ -25,12 +25,6 @@ void ui_init(void);
 void ui_set_blank_timeout(uint32_t seconds);
 uint32_t ui_blank_timeout(void);
 
-/* The drift test pattern for the display soak: a 1 px frame and corner marks
- * at the panel edges, a moving bar that keeps LVGL drawing, and a status
- * line. Screen blanking is off while it shows. */
-void ui_set_soak(bool on);
-bool ui_soak_on(void);
-
 /* Show a short message at the bottom of the screen. */
 void ui_toast(const char *msg);
 
@@ -77,10 +71,6 @@ typedef struct {
 
 void ui_platform_sys_info(ui_sys_info_t *out);
 void ui_platform_backlight(bool on);
-/* Soak mode switched on the screen: start or stop the Wi-Fi and flash load. */
-void ui_platform_soak(bool on);
-/* "Picture shifted" pressed during the soak: log it and restart the panel DMA. */
-void ui_platform_drift_seen(void);
 /* Screen timeout chosen on the settings screen: save it. */
 void ui_platform_save_blank_timeout(uint32_t seconds);
 

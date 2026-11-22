@@ -88,6 +88,9 @@ typedef struct {
      * period ends. 0 = no end time (or not known yet after a restart). */
     uint8_t    hw_mode;
     uint16_t   boost_left_min;
+    /* The length that override was started with, in minutes (the boost
+     * button to light), 0 = none or not known. */
+    uint16_t   boost_len_min;
 
     zone_pending_t pend;            /* filled by the zone store */
 } zone_view_t;
@@ -144,6 +147,17 @@ const char *zone_prog_day_name(uint8_t days, int day);
  * evening level carries over midnight). 0 if the day has no levels. */
 uint8_t zone_comfort_at(const hm_period_t p[4], int m);
 
+/* Setting a stat's clock makes it look up its programme again, which drops a
+ * setpoint override (one the bridge, Matter or the stat's keys set) back to
+ * the comfort level. This says whether *v has an override a clock write would
+ * lose: the stat is heating on its programme, and the setpoint (or the one
+ * being written) differs from the comfort level at the stat's own clock.
+ * Without a temperature hold the override must also still be in force at the
+ * new time (new_wday 1-7 = Mon-Sun, new_minute 0-1439): same programme day,
+ * same comfort period. If so, *out is the setpoint to write back after the
+ * clock. */
+bool zone_setpoint_to_restore(const zone_view_t *v, int new_wday, int new_minute, uint8_t *out);
+
 /* Whether hot water is on at minute m given a day's on/off pairs. */
 bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m);
 
@@ -192,19 +206,23 @@ size_t zone_list_encode(const zone_cfg_t *z, size_t n, uint8_t *out, size_t cap)
 int zone_list_decode(const uint8_t *in, size_t len, zone_cfg_t *z, size_t cap);
 
 /* ---- saved hot water overrides (NVS blob "zones/hw") ---------------------
- * Version 1: [version=1][count] then count entries of
- * [addr][mode][end, UTC seconds, 4 bytes little endian]. Only stats whose
+ * Version 2: [version=2][count] then count entries of
+ * [addr][mode][end, UTC seconds, 4 bytes little endian]
+ * [length, minutes, 2 bytes little endian]. Version 1 (milestone 5) is the
+ * same without the length; it still decodes, with length 0. Only stats whose
  * hot water is not simply following its timer are saved. end 0 = no end
  * time, or one that started before the clock was set. A ZONE_HW_TIMER entry
  * with an end is a "back to the timer" write still to be retried. */
-#define ZONE_HW_BLOB_VERSION  1
-#define ZONE_HW_ENTRY_SIZE    6
+#define ZONE_HW_BLOB_VERSION  2
+#define ZONE_HW_ENTRY_SIZE    8
+#define ZONE_HW_ENTRY_SIZE_V1 6
 #define ZONE_HW_BLOB_MAX      (2 + HM_SCHED_MAX_STATS * ZONE_HW_ENTRY_SIZE)
 
 typedef struct {
     uint8_t  addr;
     uint8_t  mode;                  /* ZONE_HW_* */
     uint32_t end_utc;
+    uint16_t len_min;               /* the override's length, 0 = not known */
 } zone_hw_saved_t;
 
 size_t zone_hw_encode(const zone_hw_saved_t *e, size_t n, uint8_t *out, size_t cap);

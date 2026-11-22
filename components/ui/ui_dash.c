@@ -265,7 +265,10 @@ static void tile_show(tile_t *t, const zone_view_t *v)
     lv_obj_set_style_text_color(t->icons, heating ? C_COPPER : C_MUTED, 0);
 
     if (v->have && v->room_t10 != ZONE_T_ABSENT) {
-        zone_fmt_t10(v->room_t10, buf, sizeof buf);
+        /* Whole degrees here, rounded half away from zero; the zone screen
+         * shows the tenth. */
+        const int t10 = v->room_t10;
+        snprintf(buf, sizeof buf, "%d", (t10 >= 0 ? t10 + 5 : t10 - 5) / 10);
         set_temp_text(t, buf, true, heating ? C_COPPER : C_TEXT);
     } else {
         set_temp_text(t, "--", false, C_MUTED);

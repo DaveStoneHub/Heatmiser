@@ -11,7 +11,6 @@
 
 static lv_obj_t *s_scr, *s_boost_state, *s_left, *s_icon_line, *s_big, *s_mode_txt, *s_next_cap, *s_next;
 static lv_obj_t *s_mode[3], *s_boost[3], *s_now_lbl, *s_strip, *s_seg[4], *s_marker, *s_none, *s_edit;
-static unsigned s_boost_len; /* the boost last chosen here */
 
 static const unsigned s_boost_min[3] = { 30, 60, 120 };
 static const int s_cmds[3] = { HM_HW_FOLLOW_TIMER, HM_HW_FORCE_ON, HM_HW_FORCE_OFF };
@@ -36,14 +35,10 @@ static void boost_event(lv_event_t *e)
     if (!ui_zone(ui_cur_addr, &v)) {
         return;
     }
-    if (v.hw_mode == ZONE_HW_BOOST && s_boost_len == s_boost_min[i]) {
+    if (v.hw_mode == ZONE_HW_BOOST && v.boost_len_min == s_boost_min[i]) {
         ui_report(zone_store_hw_boost(ui_cur_addr, 0), "Boost"); /* tap again to end it */
     } else {
-        zone_err_t err = zone_store_hw_boost(ui_cur_addr, s_boost_min[i]);
-        ui_report(err, "Boost");
-        if (err == ZONE_OK) {
-            s_boost_len = s_boost_min[i];
-        }
+        ui_report(zone_store_hw_boost(ui_cur_addr, s_boost_min[i]), "Boost");
     }
     ui_refresh(1u << (ui_cur_addr - 1));
 }
@@ -173,8 +168,11 @@ static void hw_refresh(uint32_t dirty)
         ui_enable(s_mode[i], live);
         ui_btn_kind(s_mode[i], i == sel ? UI_BTN_SOLID : UI_BTN_PLAIN);
         ui_enable(s_boost[i], live);
-        ui_btn_kind(s_boost[i], v.hw_mode == ZONE_HW_BOOST && s_boost_len == s_boost_min[i] ? UI_BTN_TINT
-                                                                                            : UI_BTN_PLAIN);
+        /* The bridge keeps the boost's length, so this holds after leaving
+         * the screen or a restart; a Matter boost of another length lights
+         * none. */
+        ui_btn_kind(s_boost[i], v.hw_mode == ZONE_HW_BOOST && v.boost_len_min == s_boost_min[i] ? UI_BTN_TINT
+                                                                                                : UI_BTN_PLAIN);
     }
     ui_enable(s_edit, v.have && v.hw_timer_days > 0);
     strip_show(&v);
@@ -187,9 +185,6 @@ static void hw_tick(void)
 
 void hw_open(uint8_t addr)
 {
-    if (addr != ui_cur_addr) {
-        s_boost_len = 60;
-    }
     ui_cur_addr = addr;
 }
 

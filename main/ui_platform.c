@@ -39,16 +39,6 @@ void ui_platform_backlight(bool on)
     board_backlight(on);
 }
 
-void ui_platform_soak(bool on)
-{
-    display_soak(on);
-}
-
-void ui_platform_drift_seen(void)
-{
-    display_soak_drift_seen();
-}
-
 void ui_platform_save_blank_timeout(uint32_t s)
 {
     nvs_handle_t h;

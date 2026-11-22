@@ -1,5 +1,10 @@
 # Bench: milestone 3, the touchscreen
 
+> **Since the gate:** the drift test pattern, its System screen button and the
+> `display soak` console command were removed after milestone 5, once the
+> soak had passed. The board's restart-in-vsync fix that stopped the drift
+> stays. The steps below describe the firmware as it was for the gate.
+
 ## Bench results (19 Nov 2026)
 
 **Gate passed, on a shortened soak of 15 h 40 min.** Firmware d3baecc (the

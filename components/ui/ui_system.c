@@ -1,25 +1,20 @@
-/* System: Wi-Fi, clock, memory, display and firmware, and the drift test
- * pattern for the display soak. */
+/* System: Wi-Fi, clock and date, memory, display and firmware. */
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "ui_internal.h"
 
-enum { I_WIFI, I_CLOCK, I_UPTIME, I_MEM, I_DISPLAY, I_FW, I_COUNT };
-static const char *const s_names[I_COUNT] = { "Wi-Fi", "Clock", "Running for", "Memory", "Display", "Firmware" };
+enum { I_WIFI, I_CLOCK, I_DATE, I_UPTIME, I_MEM, I_DISPLAY, I_FW, I_COUNT };
+static const char *const s_names[I_COUNT] = { "Wi-Fi", "Clock", "Date", "Running for", "Memory", "Display",
+                                              "Firmware" };
 
-static lv_obj_t *s_scr, *s_val[I_COUNT], *s_soak_btn;
+static lv_obj_t *s_scr, *s_val[I_COUNT];
 
 static void back_event(lv_event_t *e)
 {
     (void)e;
     ui_show_settings();
-}
-
-static void soak_event(lv_event_t *e)
-{
-    (void)e;
-    ui_set_soak(!ui_soak_on());
 }
 
 static void system_tick(void)
@@ -37,6 +32,17 @@ static void system_tick(void)
     lv_label_set_text(s_val[I_WIFI], buf);
     ui_clock_text(clock, sizeof clock, true);
     lv_label_set_text_fmt(s_val[I_CLOCK], "%s%s", clock, si.time_set ? "" : " (not synced yet)");
+    if (si.time_set) {
+        time_t now = time(NULL);
+        struct tm tm;
+        localtime_r(&now, &tm);
+        char day[16], month[24];
+        strftime(day, sizeof day, "%A", &tm);
+        strftime(month, sizeof month, "%B %Y", &tm);
+        lv_label_set_text_fmt(s_val[I_DATE], "%s %d %s", day, tm.tm_mday, month); /* Sunday 22 November 2026 */
+    } else {
+        lv_label_set_text(s_val[I_DATE], "--");
+    }
     lv_label_set_text_fmt(s_val[I_UPTIME], "%u d %u h %02u min", (unsigned)(si.uptime_s / 86400),
                           (unsigned)(si.uptime_s / 3600 % 24), (unsigned)(si.uptime_s / 60 % 60));
     lv_label_set_text_fmt(s_val[I_MEM], "%u KB internal free (lowest %u KB), %u KB PSRAM",
@@ -44,9 +50,6 @@ static void system_tick(void)
                           (unsigned)(si.heap_psram_free / 1024));
     lv_label_set_text_fmt(s_val[I_DISPLAY], "%u frames drawn", (unsigned)si.frames);
     lv_label_set_text(s_val[I_FW], si.version ? si.version : "?");
-    ui_btn_kind(s_soak_btn, ui_soak_on() ? UI_BTN_TINT : UI_BTN_PLAIN);
-    lv_label_set_text(ui_btn_label(s_soak_btn), ui_soak_on() ? HM_ICON_MONITOR "  Drift test pattern on"
-                                                             : HM_ICON_MONITOR "  Drift test pattern");
 }
 
 static void system_refresh(uint32_t dirty)
@@ -83,14 +86,6 @@ static lv_obj_t *system_create(void)
         lv_obj_set_flex_grow(s_val[i], 1);
         ui_label_dots(s_val[i]);
     }
-
-    lv_obj_t *row = ui_row(body, GAP);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    s_soak_btn = ui_btn(row, "", soak_event, NULL);
-    lv_obj_set_width(s_soak_btn, 300);
-    lv_obj_t *note = ui_label(row, F_BODY, C_MUTED, "A frame and corner marks at the panel edges, for the 24 h display soak.");
-    lv_obj_set_flex_grow(note, 1);
-    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
     return s_scr;
 }
 

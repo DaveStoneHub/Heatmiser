@@ -17,7 +17,6 @@ static uint16_t s_fb[W * H];
 static uint32_t s_ms;
 static struct { int x, y; bool down; } s_touch;
 static const char *s_out = ".";
-static bool s_soak;
 
 /* ---- platform hooks ---- */
 
@@ -38,8 +37,6 @@ void ui_platform_sys_info(ui_sys_info_t *o)
     o->version = "m3-preview";
 }
 void ui_platform_backlight(bool on) { (void)on; }
-void ui_platform_soak(bool on) { s_soak = on; }
-void ui_platform_drift_seen(void) {}
 void ui_platform_save_blank_timeout(uint32_t s) { (void)s; }
 static const char *s_tz = "GMT0BST,M3.5.0/1,M10.5.0";
 const char *ui_platform_tz(void) { return s_tz; }
@@ -99,6 +96,18 @@ static void tap(int x, int y)
     run(80);
     s_touch.down = false;
     run(120);
+}
+
+static void drag(int x, int y0, int y1)
+{
+    s_touch.x = x; s_touch.y = y0; s_touch.down = true;
+    run(60);
+    for (int i = 1; i <= 20; i++) {
+        s_touch.y = y0 + (y1 - y0) * i / 20;
+        run(20);
+    }
+    s_touch.down = false;
+    run(1000);
 }
 
 static void long_press(int x, int y)
@@ -186,7 +195,10 @@ int main(int argc, char **argv)
 
     ui_show_hotwater(3);
     shot("12-hot-water");
-    fake_set_boost(3, 42);
+    fake_set_boost(3, 30);         /* a 30 min boost, then away to another stat and back */
+    ui_show_zone(1);
+    run(200);
+    ui_show_hotwater(3);
     run(400);
     shot("13-hot-water-boost");
     fake_set_boost(3, 0);
@@ -218,6 +230,8 @@ int main(int argc, char **argv)
     ui_show_diag();
     run(1200);
     shot("22-bus-diagnostics");
+    drag(400, 260, 90);            /* the rows scroll under the headings */
+    shot("22b-bus-diagnostics-scrolled");
 
     ui_show_system();
     run(1200);
@@ -227,11 +241,5 @@ int main(int argc, char **argv)
     s_matter_paired = true;
     ui_show_matter();
     shot("26-matter-paired");
-
-    ui_set_soak(true);
-    ui_show_dash();
-    run(1500);
-    shot("24-soak-pattern");
-    ui_set_soak(false);
     return 0;
 }

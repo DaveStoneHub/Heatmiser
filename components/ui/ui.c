@@ -1,5 +1,4 @@
-/* Screens, shared widgets, popups, the refresh timers, blanking and the soak
- * pattern. */
+/* Screens, shared widgets, popups, the refresh timers and blanking. */
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -635,7 +634,7 @@ static void wake_event(lv_event_t *e)
 
 static void blank_check(void)
 {
-    if (s_blanked || s_blank_s == 0 || ui_soak_on()) {
+    if (s_blanked || s_blank_s == 0) {
         return;
     }
     if (lv_display_get_inactive_time(NULL) < s_blank_s * 1000u) {
@@ -663,121 +662,6 @@ void ui_set_blank_timeout(uint32_t s)
 uint32_t ui_blank_timeout(void)
 {
     return s_blank_s;
-}
-
-/* ---- soak pattern ---------------------------------------------------------------------- */
-
-static struct {
-    lv_obj_t *root, *status, *bar;
-    lv_anim_t anim;
-    uint32_t started_s;
-} s_soak;
-
-static lv_obj_t *soak_rect(lv_obj_t *p, int x, int y, int w, int h, lv_color_t c)
-{
-    lv_obj_t *o = ui_box(p);
-    lv_obj_set_pos(o, x, y);
-    lv_obj_set_size(o, w, h);
-    lv_obj_set_style_bg_color(o, c, 0);
-    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
-    return o;
-}
-
-static void soak_bar_anim(void *obj, int32_t v)
-{
-    lv_obj_set_x(obj, v);
-}
-
-static void soak_drift_event(lv_event_t *e)
-{
-    (void)e;
-    ui_platform_drift_seen();
-    ui_toast("Drift noted in the log; the panel DMA was restarted");
-}
-
-static void soak_build(void)
-{
-    const int W = SCR_W, H = SCR_H;
-    lv_obj_t *r = ui_box(lv_layer_sys());
-    lv_obj_set_size(r, W, H);
-    lv_obj_add_flag(r, LV_OBJ_FLAG_FLOATING);
-    s_soak.root = r;
-    /* White 1 px frame on the outermost pixels, red 1 px frame inside it. A
-     * sideways shift moves the white line off one edge and wraps it in at
-     * the other. */
-    soak_rect(r, 0, 0, W, 1, lv_color_white());
-    soak_rect(r, 0, H - 1, W, 1, lv_color_white());
-    soak_rect(r, 0, 0, 1, H, lv_color_white());
-    soak_rect(r, W - 1, 0, 1, H, lv_color_white());
-    soak_rect(r, 2, 2, W - 4, 1, lv_color_hex(0xFF0000));
-    soak_rect(r, 2, H - 3, W - 4, 1, lv_color_hex(0xFF0000));
-    soak_rect(r, 2, 2, 1, H - 4, lv_color_hex(0xFF0000));
-    soak_rect(r, W - 3, 2, 1, H - 4, lv_color_hex(0xFF0000));
-    /* Corner marks: green top left, blue top right, yellow bottom left,
-     * magenta bottom right. Colour order also shows a byte-order fault. */
-    soak_rect(r, 4, 4, 12, 12, lv_color_hex(0x00FF00));
-    soak_rect(r, W - 16, 4, 12, 12, lv_color_hex(0x0000FF));
-    soak_rect(r, 4, H - 16, 12, 12, lv_color_hex(0xFFFF00));
-    soak_rect(r, W - 16, H - 16, 12, 12, lv_color_hex(0xFF00FF));
-    /* Moving bar keeps LVGL drawing and the frame buffers busy. */
-    s_soak.bar = soak_rect(r, 0, H - 8, 60, 3, C_COPPER);
-    lv_anim_init(&s_soak.anim);
-    lv_anim_set_var(&s_soak.anim, s_soak.bar);
-    lv_anim_set_exec_cb(&s_soak.anim, soak_bar_anim);
-    lv_anim_set_values(&s_soak.anim, 20, W - 80);
-    lv_anim_set_duration(&s_soak.anim, 2000);
-    lv_anim_set_playback_duration(&s_soak.anim, 2000);
-    lv_anim_set_repeat_count(&s_soak.anim, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_start(&s_soak.anim);
-
-    s_soak.status = ui_label(r, F_BODY, lv_color_white(), "");
-    lv_obj_set_style_bg_color(s_soak.status, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(s_soak.status, LV_OPA_60, 0);
-    lv_obj_set_style_pad_hor(s_soak.status, 6, 0);
-    lv_obj_align(s_soak.status, LV_ALIGN_BOTTOM_LEFT, 22, -14);
-
-    lv_obj_t *b = ui_btn(r, "Picture shifted", soak_drift_event, NULL);
-    lv_obj_set_size(b, 200, 48);
-    ui_btn_kind(b, UI_BTN_DANGER);
-    lv_obj_align(b, LV_ALIGN_BOTTOM_RIGHT, -22, -14);
-}
-
-static void soak_tick(void)
-{
-    if (!s_soak.root || lv_obj_has_flag(s_soak.root, LV_OBJ_FLAG_HIDDEN)) {
-        return;
-    }
-    ui_sys_info_t si;
-    ui_platform_sys_info(&si);
-    uint32_t up = si.uptime_s - s_soak.started_s;
-    lv_label_set_text_fmt(s_soak.status, "Drift test %uh %02um  |  Wi-Fi %s %d dBm  |  frames %u  |  RAM %uk (min %uk)",
-                          (unsigned)(up / 3600), (unsigned)(up / 60 % 60),
-                          si.wifi_up ? "up" : "DOWN", si.rssi, (unsigned)si.frames,
-                          (unsigned)(si.heap_int_free / 1024), (unsigned)(si.heap_int_min / 1024));
-}
-
-void ui_set_soak(bool on)
-{
-    if (on && !s_soak.root) {
-        soak_build();
-    }
-    if (s_soak.root) {
-        if (on) {
-            ui_sys_info_t si;
-            ui_platform_sys_info(&si);
-            s_soak.started_s = si.uptime_s;
-            lv_obj_remove_flag(s_soak.root, LV_OBJ_FLAG_HIDDEN);
-            soak_tick();
-        } else {
-            lv_obj_add_flag(s_soak.root, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-    ui_platform_soak(on);
-}
-
-bool ui_soak_on(void)
-{
-    return s_soak.root && !lv_obj_has_flag(s_soak.root, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* ---- screens and timers ------------------------------------------------------------------ */
@@ -901,7 +785,6 @@ static void second_timer(lv_timer_t *t)
     if (s_ops[s_screen]->tick) {
         s_ops[s_screen]->tick();
     }
-    soak_tick();
     blank_check();
 }
 

@@ -73,6 +73,10 @@ static bool        s_wait_clock[HM_SCHED_MAX_STATS];
 static bool        s_hw_save;                       /* under s_mu: save_hw() needed */
 static uint8_t     s_hw_blob[ZONE_HW_BLOB_MAX];     /* what NVS holds */
 static size_t      s_hw_blob_len;
+/* Sync clocks: the setpoint to write back once the clock write is done
+ * (0 = none), and the ones now due, both under s_mu. */
+static uint8_t     s_restore_set[HM_SCHED_MAX_STATS];
+static uint8_t     s_restore_due[HM_SCHED_MAX_STATS];
 
 static char   s_notice[NOTICES][NOTICE_LEN];
 static size_t s_notice_head, s_notice_n;
@@ -83,6 +87,8 @@ static struct {
 
 static zone_err_t hw_cmd(uint8_t addr, int cmd, uint8_t mode, unsigned boost_min);
 static void boost_check(void *arg);
+static void restore_setpoints(void *arg);
+static esp_timer_handle_t s_restore_timer;
 static void save_hw(void);
 
 static void lock(void)   { xSemaphoreTake(s_mu, portMAX_DELAY); }
@@ -103,6 +109,7 @@ static bool clock_ok(void)
 static void hw_clear_locked(int i)
 {
     s_view[i].hw_mode = ZONE_HW_TIMER;
+    s_view[i].boost_len_min = 0;
     s_boost_end[i] = 0;
     s_end_utc[i] = 0;
     s_wait_clock[i] = false;
@@ -276,6 +283,13 @@ static void write_done_locked(const hm_event_t *ev)
     const char *why = wdone_reason(ev->wdone);
 #define MATCH(field) (id->field == ev->write_id || id->field == 0)
     switch (ev->write.addr) {
+    case HM_UA_CLOCK:
+        /* The stat has gone back to its programme: put the override back. */
+        if (s_restore_set[i] && ok) {
+            s_restore_due[i] = s_restore_set[i];
+        }
+        s_restore_set[i] = 0;
+        break;
     case HM_UA_SET_TEMP:
         if (v->pend.set_temp && MATCH(set)) {
             if (!ok) {
@@ -403,7 +417,16 @@ static void on_event(const hm_event_t *ev, void *arg)
         save_now = true;
     }
     save_hw_now = s_hw_save;
+    bool restore = false;
+    for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+        restore |= s_restore_due[i] != 0;
+    }
     unlock();
+    /* Not from here: a write can emit an event, and this runs under the
+     * poller's event lock. */
+    if (restore && s_restore_timer) {
+        esp_timer_start_once(s_restore_timer, 0);
+    }
     if (save_now) {
         save();
     }
@@ -487,6 +510,7 @@ int zone_store_init(void)
         const bool keep = used && (timed || (e->end_utc == 0 && (e->mode == ZONE_HW_ON || e->mode == ZONE_HW_OFF)));
         if (keep) {
             s_view[i].hw_mode = e->mode;
+            s_view[i].boost_len_min = timed ? e->len_min : 0;
             s_end_utc[i] = timed ? e->end_utc : 0;
             s_wait_clock[i] = timed;
             s_dirty |= 1u << i;
@@ -512,6 +536,10 @@ int zone_store_init(void)
     esp_timer_handle_t timer;
     if (esp_timer_create(&ta, &timer) == ESP_OK) {
         esp_timer_start_periodic(timer, BOOST_CHECK_MS * 1000ull);
+    }
+    const esp_timer_create_args_t tr = { .callback = restore_setpoints, .name = "zone_restore" };
+    if (esp_timer_create(&tr, &s_restore_timer) != ESP_OK) {
+        s_restore_timer = NULL;
     }
     ESP_LOGI(TAG, "%d zone(s) restored%s", n, n ? ", polling" : "");
     return n;
@@ -886,6 +914,7 @@ static void save_hw(void)
             e[n].addr = (uint8_t)(i + 1);
             e[n].mode = s_view[i].hw_mode;
             e[n].end_utc = s_boost_end[i] || s_wait_clock[i] ? s_end_utc[i] : 0;
+            e[n].len_min = s_view[i].boost_len_min;
             n++;
         }
     }
@@ -932,6 +961,7 @@ static zone_err_t hw_cmd(uint8_t addr, int cmd, uint8_t mode, unsigned minutes)
         lock();
         const int i = addr - 1;
         s_view[i].hw_mode = mode;
+        s_view[i].boost_len_min = (uint16_t)minutes;
         s_wait_clock[i] = false;
         if (minutes) {
             s_boost_end[i] = (now_ms() + minutes * 60000u) | 1u;
@@ -997,6 +1027,24 @@ zone_err_t zone_store_hw_switch(uint8_t addr, bool on, unsigned boost_min)
              p.cmd == HM_HW_FORCE_ON ? "boost" : p.cmd == HM_HW_FORCE_OFF ? "forced off" : "back to the timer",
              p.minutes);
     return hw_cmd(addr, p.cmd, p.mode, p.minutes);
+}
+
+/* esp_timer task: write back the setpoint overrides a clock write dropped. */
+static void restore_setpoints(void *arg)
+{
+    (void)arg;
+    uint8_t due[HM_SCHED_MAX_STATS];
+    lock();
+    memcpy(due, s_restore_due, sizeof due);
+    memset(s_restore_due, 0, sizeof s_restore_due);
+    unlock();
+    for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+        if (due[i]) {
+            zone_err_t e = zone_store_set_temp((uint8_t)(i + 1), due[i]);
+            ESP_LOGI(TAG, "stat %d: setpoint %u %s after the clock write", i + 1, due[i],
+                     e == ZONE_OK ? "written back" : "could not be written back");
+        }
+    }
 }
 
 /* esp_timer task: end overrides that are due, and carry on the ones saved
@@ -1129,11 +1177,38 @@ int zone_store_sync_clocks(void)
     }
     struct tm tm;
     localtime_r(&now, &tm);
+    const int wday = tm.tm_wday == 0 ? 7 : tm.tm_wday;
     hm_write_t w;
-    if (hm_wr_clock(&w, tm.tm_wday == 0 ? 7 : tm.tm_wday, tm.tm_hour, tm.tm_min, tm.tm_sec) != HM_WR_OK) {
+    if (hm_wr_clock(&w, wday, tm.tm_hour, tm.tm_min, tm.tm_sec) != HM_WR_OK) {
         return 0;
     }
-    return write_all(&w);
+    /* A clock write sends a stat back to its programme, dropping a setpoint
+     * override; each one found here is written back once its clock is done. */
+    int n = 0;
+    for (uint8_t a = HM_STAT_ADDR_MIN; a <= HM_STAT_ADDR_MAX; a++) {
+        const int i = a - 1;
+        lock();
+        const zone_view_t *v = &s_view[i];
+        const bool go = s_used[i] && v->have && v->link == HM_LINK_ONLINE;
+        uint8_t keep = 0;
+        if (go && zone_setpoint_to_restore(v, wday, tm.tm_hour * 60 + tm.tm_min, &keep)) {
+            ESP_LOGI(TAG, "stat %u: setpoint %u is an override; it goes back after the clock", a, keep);
+        }
+        s_restore_set[i] = go ? keep : 0;
+        unlock();
+        uint32_t id;
+        if (!go) {
+            continue;
+        }
+        if (hm_poller_write(a, &w, &id) == 0) {
+            n++;
+        } else {
+            lock();
+            s_restore_set[i] = 0;
+            unlock();
+        }
+    }
+    return n;
 }
 
 int zone_store_holiday_all(unsigned hours)

@@ -48,7 +48,7 @@ int  hm_poller_poll_now(uint8_t addr);
 
 /* The last bus frames, for the diagnostics screen: each request (tx) and
  * what came back. Bytes beyond HM_TRACE_BYTES are left out. */
-#define HM_TRACE_BYTES 10
+#define HM_TRACE_BYTES 24  /* more than a line of the diagnostics screen holds */
 #define HM_TRACE_LEN   12
 typedef struct {
     uint32_t  ms;
