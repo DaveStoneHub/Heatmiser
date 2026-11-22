@@ -168,7 +168,7 @@ bool zone_setpoint_to_restore(const zone_view_t *v, int new_wday, int new_minute
  * not written every minute. */
 #define ZONE_CLOCK_DAILY_MIN  (3 * 60 + 10)
 #define ZONE_CLOCK_DRIFT_MIN  2
-#define ZONE_CLOCK_RETRY_MIN  60
+#define ZONE_CLOCK_RETRY_MIN  15
 
 /* How many minutes the stat's clock is out from the bridge's, folded round
  * the week. wday (1-7 = Mon-Sun) and minute (0-1439) are the bridge's local

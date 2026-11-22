@@ -14,7 +14,7 @@ a summary and a verdict. The gate fails on:
   - the bridge losing the time (time=0 after it had it).
 
 Stats offline, failed writes, Wi-Fi drops and Matter controllers are
-reported for you to judge, since one stat was already unreliable on the bus.
+reported for you to judge.
 
     pip install pyserial
     python tools/week_logger.py --port COM5              # 7 days

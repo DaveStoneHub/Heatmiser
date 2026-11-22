@@ -508,12 +508,12 @@ static void test_clock_sync(void)
     in.minute = 1 * 60;
     CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DRIFT);
 
-    /* At most once an hour, however far out. */
+    /* At most once every 15 minutes, however far out. */
     in.since_min = 0;
     CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
-    in.since_min = 59;
+    in.since_min = 14;
     CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
-    in.since_min = 60;
+    in.since_min = 15;
     CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DRIFT);
 
     /* Not read yet or no clock: never. */
