@@ -17,8 +17,9 @@ CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
 
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
 # The zone store's timers (hot water overrides, setpoints after a clock
-# sync) log from the esp_timer task.
-CONFIG_ESP_TIMER_TASK_STACK_SIZE=4096
+# sync, the automatic clock sync) and the hourly health line run in the
+# esp_timer task.
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=5120
 CONFIG_CONSOLE_SORTED_HELP=y
 
 # 8 MB octal PSRAM. Code and read-only data run from PSRAM (XIP), so flash
@@ -91,3 +92,15 @@ CONFIG_ENABLE_WIFI_AP=n
 # Personal build: Matter test vendor ID and test attestation certificates.
 CONFIG_DEVICE_VENDOR_ID=0xFFF1
 CONFIG_DEVICE_PRODUCT_ID=0x8000
+
+# ---- Firmware updates (milestone 6) ------------------------------------------
+# A new firmware is on trial after an update: the bootloader goes back to the
+# previous one unless it marks itself good (components/ota). Changing this
+# needs the bootloader flashed once over USB (idf.py flash does it).
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Releases come from GitHub over HTTPS (certificate bundle); a bench build can
+# also come from a PC on the LAN over plain HTTP (tools/ota_serve.py).
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+# Updates come from GitHub, not from a Matter OTA provider.
+CONFIG_ENABLE_OTA_REQUESTOR=n

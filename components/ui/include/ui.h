@@ -85,6 +85,35 @@ extern const size_t ui_timezone_count;
 const char *ui_platform_tz(void);
 void ui_platform_set_tz(const char *posix);
 
+/* The settings PIN: four digits, saved as a salted hash. */
+bool ui_platform_pin_enabled(void);
+bool ui_platform_pin_check(const char *pin);
+/* Save a new PIN, or turn it off with NULL. */
+bool ui_platform_pin_save(const char *pin);
+
+/* Firmware updates, for the System screen (states as in ota.h). */
+typedef enum {
+    UI_OTA_IDLE = 0,
+    UI_OTA_CHECKING,
+    UI_OTA_UP_TO_DATE,
+    UI_OTA_AVAILABLE,
+    UI_OTA_DOWNLOADING,
+    UI_OTA_RESTARTING,
+    UI_OTA_FAILED,
+} ui_ota_state_t;
+typedef struct {
+    ui_ota_state_t state;
+    char running[32];
+    char latest[32];
+    int  percent;                /* while downloading; -1 if not known */
+    char error[80];
+    bool on_trial;               /* new firmware, not kept yet */
+} ui_ota_info_t;
+void ui_platform_ota_info(ui_ota_info_t *out);
+/* Look for a newer release; install the one found. False if busy. */
+bool ui_platform_ota_check(void);
+bool ui_platform_ota_install(void);
+
 /* Factory reset confirmed on the screen: forget everything and restart. */
 void ui_platform_factory_reset(void);
 

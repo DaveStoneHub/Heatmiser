@@ -61,6 +61,16 @@ void ui_platform_matter_info(ui_matter_info_t *o)
         o->window_left_s = 14 * 60 + 32;
     }
 }
+static char s_pin[5];
+bool ui_platform_pin_enabled(void) { return s_pin[0] != 0; }
+bool ui_platform_pin_check(const char *pin) { return strcmp(pin, s_pin) == 0; }
+bool ui_platform_pin_save(const char *pin) { snprintf(s_pin, sizeof s_pin, "%s", pin ? pin : ""); return true; }
+
+static ui_ota_info_t s_ota = { .state = UI_OTA_UP_TO_DATE, .running = "v0.6.0", .latest = "v0.6.0", .percent = -1 };
+void ui_platform_ota_info(ui_ota_info_t *o) { *o = s_ota; }
+bool ui_platform_ota_check(void) { return true; }
+bool ui_platform_ota_install(void) { return true; }
+
 bool ui_platform_matter_open_window(void) { return true; }
 bool ui_platform_matter_remove_fabric(uint8_t index) { (void)index; return true; }
 
@@ -236,10 +246,33 @@ int main(int argc, char **argv)
     ui_show_system();
     run(1200);
     shot("23-system");
+    s_ota.state = UI_OTA_AVAILABLE;
+    snprintf(s_ota.latest, sizeof s_ota.latest, "v0.6.1");
+    run(1200);
+    shot("23b-system-update");
+    tap(600, 440);                 /* Install v0.6.1 */
+    shot("23c-system-install");
+    tap(20, 20);                   /* outside the box closes it */
+    s_ota.state = UI_OTA_DOWNLOADING;
+    s_ota.percent = 42;
+    run(1200);
+    shot("23d-system-updating");
+    s_ota.state = UI_OTA_UP_TO_DATE;
     ui_show_matter();
     shot("25-matter-pairing");
     s_matter_paired = true;
     ui_show_matter();
     shot("26-matter-paired");
+
+    /* The settings PIN. */
+    ui_platform_pin_save("1234");
+    ui_show_dash();
+    ui_show_settings();            /* locked: the keypad */
+    tap(286, 199);                 /* 1 */
+    tap(400, 199);                 /* 2 */
+    shot("27-pin-entry");
+    tap(514, 199);                 /* 3 */
+    tap(286, 265);                 /* 4 */
+    shot("28-settings-pin-on");
     return 0;
 }

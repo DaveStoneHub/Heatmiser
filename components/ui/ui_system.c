@@ -1,4 +1,5 @@
-/* System: Wi-Fi, clock and date, memory, display and firmware. */
+/* System: Wi-Fi, clock and date, memory, display and firmware, with the
+ * firmware update (check for a new release, install it). */
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -9,7 +10,68 @@ enum { I_WIFI, I_CLOCK, I_DATE, I_UPTIME, I_MEM, I_DISPLAY, I_FW, I_COUNT };
 static const char *const s_names[I_COUNT] = { "Wi-Fi", "Clock", "Date", "Running for", "Memory", "Display",
                                               "Firmware" };
 
-static lv_obj_t *s_scr, *s_val[I_COUNT];
+static lv_obj_t *s_scr, *s_val[I_COUNT], *s_check, *s_install;
+
+static void fw_text(char *buf, size_t cap, const ui_ota_info_t *o)
+{
+    const char *trial = o->on_trial ? " (new, on trial)" : "";
+    switch (o->state) {
+    case UI_OTA_CHECKING:
+        snprintf(buf, cap, "%s%s, checking for updates" ELLIPSIS, o->running, trial);
+        break;
+    case UI_OTA_UP_TO_DATE:
+        snprintf(buf, cap, "%s%s, up to date", o->running, trial);
+        break;
+    case UI_OTA_AVAILABLE:
+        snprintf(buf, cap, "%s%s, %s available", o->running, trial, o->latest);
+        break;
+    case UI_OTA_DOWNLOADING:
+        if (o->percent >= 0) {
+            snprintf(buf, cap, "Updating, %d%% downloaded", o->percent);
+        } else {
+            snprintf(buf, cap, "Updating, downloading" ELLIPSIS);
+        }
+        break;
+    case UI_OTA_RESTARTING:
+        snprintf(buf, cap, "Updated to %s, restarting" ELLIPSIS, o->latest);
+        break;
+    case UI_OTA_FAILED:
+        snprintf(buf, cap, "%s%s. %s", o->running, trial, o->error);
+        break;
+    default:
+        snprintf(buf, cap, "%s%s%s%s", o->running, trial, o->error[0] ? ". " : "", o->error);
+        break;
+    }
+}
+
+static void check_event(lv_event_t *e)
+{
+    (void)e;
+    if (!ui_platform_ota_check()) {
+        ui_toast("An update is already running");
+    }
+}
+
+static void do_install(void *arg)
+{
+    (void)arg;
+    if (!ui_platform_ota_install()) {
+        ui_toast("Check for the update first");
+    }
+}
+
+static void install_event(lv_event_t *e)
+{
+    (void)e;
+    ui_ota_info_t o;
+    ui_platform_ota_info(&o);
+    static char msg[320];
+    snprintf(msg, sizeof msg,
+             "The bridge downloads %s from GitHub and restarts, which takes a few minutes. The thermostats "
+             "keep running on their own meanwhile. If the new firmware does not work, the bridge goes back to %s.",
+             o.latest, o.running);
+    ui_confirm("Install the update?", msg, "Install", do_install, NULL);
+}
 
 static void back_event(lv_event_t *e)
 {
@@ -21,7 +83,7 @@ static void system_tick(void)
 {
     ui_sys_info_t si;
     ui_platform_sys_info(&si);
-    char buf[96], clock[32];
+    char buf[200], clock[32];
     if (!si.wifi_configured) {
         snprintf(buf, sizeof buf, "Not set up. Use 'wifi join' on the console.");
     } else if (si.wifi_up) {
@@ -49,7 +111,20 @@ static void system_tick(void)
                           (unsigned)(si.heap_int_free / 1024), (unsigned)(si.heap_int_min / 1024),
                           (unsigned)(si.heap_psram_free / 1024));
     lv_label_set_text_fmt(s_val[I_DISPLAY], "%u frames drawn", (unsigned)si.frames);
-    lv_label_set_text(s_val[I_FW], si.version ? si.version : "?");
+    ui_ota_info_t o;
+    ui_platform_ota_info(&o);
+    fw_text(buf, sizeof buf, &o);
+    lv_label_set_text(s_val[I_FW], buf);
+    lv_obj_set_style_text_color(s_val[I_FW], o.state == UI_OTA_FAILED ? C_FAULT
+                                : o.state == UI_OTA_AVAILABLE ? C_COPPER : C_TEXT, 0);
+    const bool busy = o.state == UI_OTA_CHECKING || o.state == UI_OTA_DOWNLOADING || o.state == UI_OTA_RESTARTING;
+    ui_enable(s_check, !busy);
+    ui_enable(s_install, o.state == UI_OTA_AVAILABLE);
+    if (o.state == UI_OTA_AVAILABLE) {
+        lv_label_set_text_fmt(ui_btn_label(s_install), HM_ICON_CHECK "  Install %s", o.latest);
+    } else {
+        lv_label_set_text(ui_btn_label(s_install), HM_ICON_CHECK "  Install update");
+    }
 }
 
 static void system_refresh(uint32_t dirty)
@@ -74,7 +149,7 @@ static lv_obj_t *system_create(void)
     lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
     for (int i = 0; i < I_COUNT; i++) {
         lv_obj_t *r = ui_row(p, GAP);
-        lv_obj_set_height(r, 46);
+        lv_obj_set_height(r, 42);
         if (i < I_COUNT - 1) {
             lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
             lv_obj_set_style_border_color(r, C_BORDER, 0);
@@ -86,6 +161,12 @@ static lv_obj_t *system_create(void)
         lv_obj_set_flex_grow(s_val[i], 1);
         ui_label_dots(s_val[i]);
     }
+    lv_obj_t *row = ui_row(body, GAP);
+    s_check = ui_btn(row, HM_ICON_REFRESH "  Check for update", check_event, NULL);
+    lv_obj_set_flex_grow(s_check, 1);
+    s_install = ui_btn(row, "", install_event, NULL);
+    lv_obj_set_flex_grow(s_install, 1);
+    ui_btn_kind(s_install, UI_BTN_SOLID);
     return s_scr;
 }
 

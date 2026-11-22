@@ -187,5 +187,15 @@ void zone_scr_open(uint8_t addr);
 void sched_open(uint8_t addr, bool hot_water);
 void hw_open(uint8_t addr);
 void rename_open(uint8_t addr, ui_screen_t back);
+/* The settings PIN (ui_pin.c). ui_pin_ask shows a keypad and calls done
+ * with the four digits; closing it calls nothing. ui_with_pin runs then()
+ * at once with no PIN or when unlocked, else after the right PIN. */
+void ui_pin_ask(const char *title, const char *hint, void (*done)(const char *pin));
+void ui_with_pin(void (*then)(void));
+bool ui_pin_unlocked(void);
+void ui_pin_lock(void);
+/* The settings tile: set a PIN, or change it or turn it off. */
+void ui_pin_setup(void (*changed)(void));
+
 /* Identify: toggle a stat's key lock so its padlock blinks. */
 void ui_identify(uint8_t addr);

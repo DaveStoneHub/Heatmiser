@@ -236,6 +236,36 @@ static int comfort_period_at(const hm_period_t p[4], int m)
     return best >= 0 ? best : last >= 0 ? 4 + last : -1;
 }
 
+int zone_clock_drift_min(const zone_view_t *v, int wday, int minute)
+{
+    if (!v->have || v->clk_wday < 1 || v->clk_wday > 7 || v->clk_hour > 23 || v->clk_min > 59 || wday < 1 ||
+        wday > 7 || minute < 0 || minute > 1439) {
+        return -1;
+    }
+    const int week = 7 * 1440;
+    const int stat = (v->clk_wday - 1) * 1440 + v->clk_hour * 60 + v->clk_min;
+    const int ours = (wday - 1) * 1440 + minute;
+    int d = ((stat - ours) % week + week) % week;
+    return d > week / 2 ? week - d : d;
+}
+
+zone_clock_why_t zone_clock_due(const zone_clock_in_t *in)
+{
+    if (in->drift_min < 0) {
+        return ZONE_CLOCK_NO; /* no clock, or not read yet */
+    }
+    if (in->since_min >= 0 && in->since_min < ZONE_CLOCK_RETRY_MIN) {
+        return ZONE_CLOCK_NO;
+    }
+    if (in->drift_min > ZONE_CLOCK_DRIFT_MIN) {
+        return ZONE_CLOCK_DRIFT;
+    }
+    if (in->minute >= ZONE_CLOCK_DAILY_MIN && in->last_day != in->day) {
+        return ZONE_CLOCK_DAILY;
+    }
+    return ZONE_CLOCK_NO;
+}
+
 bool zone_setpoint_to_restore(const zone_view_t *v, int new_wday, int new_minute, uint8_t *out)
 {
     if (!v->have || v->comfort_days == 0 || v->holiday_h || v->pend.mode || v->pend.comfort ||

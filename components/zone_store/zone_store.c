@@ -31,6 +31,7 @@ static const char *TAG = "zones";
 #define NVS_NS      "zones"
 #define NVS_KEY     "list"
 #define NVS_POLL    "poll"
+#define NVS_MASTER  "master"  /* the bridge's master address, 0x81-0xA0 */
 #define NVS_BOOST   "boost"   /* before milestone 5: bit (addr-1) for each stat in a boost */
 #define NVS_HW      "hw"      /* hot water overrides, see zone_hw_encode() */
 #define NVS_HW_EP   "hwep%u"  /* a PRTHW's hot water endpoint */
@@ -77,6 +78,13 @@ static size_t      s_hw_blob_len;
  * (0 = none), and the ones now due, both under s_mu. */
 static uint8_t     s_restore_set[HM_SCHED_MAX_STATS];
 static uint8_t     s_restore_due[HM_SCHED_MAX_STATS];
+/* Clock sync, under s_mu: the local date of each stat's last confirmed
+ * clock write (-1 = none), when its last one was queued (scheduler ms, 0 =
+ * never), and totals for the health line. */
+static int32_t     s_clk_day[HM_SCHED_MAX_STATS];
+static uint32_t    s_clk_ms[HM_SCHED_MAX_STATS];
+static bool        s_clk_primed;
+static zone_clock_info_t s_clk;
 
 static char   s_notice[NOTICES][NOTICE_LEN];
 static size_t s_notice_head, s_notice_n;
@@ -90,6 +98,8 @@ static void boost_check(void *arg);
 static void restore_setpoints(void *arg);
 static esp_timer_handle_t s_restore_timer;
 static void save_hw(void);
+static void clock_check(void *arg);
+#define CLOCK_CHECK_MS 60000
 
 static void lock(void)   { xSemaphoreTake(s_mu, portMAX_DELAY); }
 static void unlock(void) { xSemaphoreGive(s_mu); }
@@ -103,6 +113,23 @@ static uint32_t now_ms(void)
 static bool clock_ok(void)
 {
     return time(NULL) > 1700000000; /* Nov 2023 */
+}
+
+/* A number for the local date, which changes at local midnight. */
+static int32_t local_day(time_t t)
+{
+    struct tm tm;
+    localtime_r(&t, &tm);
+    return (int32_t)(tm.tm_year * 400 + tm.tm_yday);
+}
+
+/* Local weekday (1-7 = Mon-Sun) and minute of the day. */
+static void local_wday_min(time_t t, int *wday, int *minute)
+{
+    struct tm tm;
+    localtime_r(&t, &tm);
+    *wday = tm.tm_wday == 0 ? 7 : tm.tm_wday;
+    *minute = tm.tm_hour * 60 + tm.tm_min;
 }
 
 /* Under s_mu: forget a stat's hot water override. */
@@ -347,7 +374,13 @@ static void write_done_locked(const hm_event_t *ev)
     case HM_UA_CLOCK:
         if (!ok) {
             notice_locked("%s: clock not set (%s)", v->cfg.name, why);
-        } else if (s_restore_set[i]) {
+            s_clk.failed++;
+        } else {
+            s_clk_day[i] = local_day(time(NULL));
+            s_clk.ok++;
+            s_clk.last_utc = (uint32_t)time(NULL);
+        }
+        if (ok && s_restore_set[i]) {
             /* The stat has gone back to its programme: put the override back. */
             s_restore_due[i] = s_restore_set[i];
         }
@@ -450,6 +483,11 @@ int zone_store_init(void)
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
         nvs_get_u32(h, NVS_POLL, &poll);
+        uint8_t master = 0;
+        if (nvs_get_u8(h, NVS_MASTER, &master) == ESP_OK && master >= ZONE_MASTER_MIN && master <= ZONE_MASTER_MAX) {
+            hm_bus_set_master(master);
+            ESP_LOGI(TAG, "master address 0x%02X (saved)", master);
+        }
         for (int k = 0; k < n; k++) {
             char key[12];
             snprintf(key, sizeof key, NVS_HW_EP, list[k].addr);
@@ -533,6 +571,14 @@ int zone_store_init(void)
     esp_timer_handle_t timer;
     if (esp_timer_create(&ta, &timer) == ESP_OK) {
         esp_timer_start_periodic(timer, BOOST_CHECK_MS * 1000ull);
+    }
+    for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+        s_clk_day[i] = -1;
+    }
+    const esp_timer_create_args_t tc = { .callback = clock_check, .name = "zone_clock" };
+    esp_timer_handle_t ctimer;
+    if (esp_timer_create(&tc, &ctimer) == ESP_OK) {
+        esp_timer_start_periodic(ctimer, CLOCK_CHECK_MS * 1000ull);
     }
     const esp_timer_create_args_t tr = { .callback = restore_setpoints, .name = "zone_restore" };
     if (esp_timer_create(&tr, &s_restore_timer) != ESP_OK) {
@@ -1166,10 +1212,13 @@ static int write_all(const hm_write_t *w)
     return n;
 }
 
-int zone_store_sync_clocks(void)
+/* Queue a clock write to each online stat in mask, with the setpoint
+ * write-back of any override it would drop. Returns how many took it, or -1
+ * if the bridge's own clock is not set. */
+static int sync_clocks(uint32_t mask)
 {
     time_t now = time(NULL);
-    if (now < 1700000000) { /* not synced: still 1970 */
+    if (!clock_ok()) {
         return -1;
     }
     struct tm tm;
@@ -1184,6 +1233,9 @@ int zone_store_sync_clocks(void)
     int n = 0;
     for (uint8_t a = HM_STAT_ADDR_MIN; a <= HM_STAT_ADDR_MAX; a++) {
         const int i = a - 1;
+        if (!(mask & (1u << i))) {
+            continue;
+        }
         lock();
         const zone_view_t *v = &s_view[i];
         const bool go = s_used[i] && v->have && v->link == HM_LINK_ONLINE;
@@ -1192,6 +1244,9 @@ int zone_store_sync_clocks(void)
             ESP_LOGI(TAG, "stat %u: setpoint %u is an override; it goes back after the clock", a, keep);
         }
         s_restore_set[i] = go ? keep : 0;
+        if (go) {
+            s_clk_ms[i] = now_ms() | 1u;
+        }
         unlock();
         uint32_t id;
         if (!go) {
@@ -1206,6 +1261,82 @@ int zone_store_sync_clocks(void)
         }
     }
     return n;
+}
+
+int zone_store_sync_clocks(void)
+{
+    return sync_clocks(0xFFFFFFFFu);
+}
+
+/* esp_timer task, once a minute: the automatic clock sync (see
+ * zone_clock_due()). */
+static void clock_check(void *arg)
+{
+    (void)arg;
+    if (!clock_ok()) {
+        return;
+    }
+    const time_t now = time(NULL);
+    const uint32_t t = now_ms();
+    const int32_t today = local_day(now);
+    int wday, minute;
+    local_wday_min(now, &wday, &minute);
+    uint32_t daily = 0, drift = 0;
+    lock();
+    if (!s_clk_primed) {
+        /* The first minute with the time after a restart: today's daily sync
+         * counts as done, so a restart does not reset every stat's clock.
+         * One that is out is still set, by the drift check. */
+        for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+            if (s_clk_day[i] < 0) {
+                s_clk_day[i] = minute >= ZONE_CLOCK_DAILY_MIN ? today : today - 1;
+            }
+        }
+        s_clk_primed = true;
+    }
+    for (int i = 0; i < HM_SCHED_MAX_STATS; i++) {
+        const zone_view_t *v = &s_view[i];
+        if (!s_used[i] || !v->have || v->link != HM_LINK_ONLINE || v->pend.mode) {
+            continue;
+        }
+        /* The stat's clock as read, against ours at the time of the read. */
+        int rw, rm;
+        local_wday_min(now - (time_t)((t - s_last_ok[i]) / 1000), &rw, &rm);
+        zone_clock_in_t in = {
+            .minute = minute,
+            .day = today,
+            .last_day = s_clk_day[i],
+            .since_min = s_clk_ms[i] ? (int32_t)((t - s_clk_ms[i]) / 60000) : -1,
+            .drift_min = zone_clock_drift_min(v, rw, rm),
+        };
+        switch (zone_clock_due(&in)) {
+        case ZONE_CLOCK_DAILY:
+            daily |= 1u << i;
+            break;
+        case ZONE_CLOCK_DRIFT:
+            ESP_LOGI(TAG, "stat %d: clock is %d min out; setting it", i + 1, in.drift_min);
+            drift |= 1u << i;
+            break;
+        default:
+            break;
+        }
+    }
+    unlock();
+    if (daily | drift) {
+        int n = sync_clocks(daily | drift);
+        lock();
+        s_clk.auto_runs++;
+        unlock();
+        ESP_LOGI(TAG, "automatic clock sync: %d stat%s queued (%d daily, %d out)", n, n == 1 ? "" : "s",
+                 __builtin_popcount(daily), __builtin_popcount(drift));
+    }
+}
+
+void zone_store_clock_info(zone_clock_info_t *out)
+{
+    lock();
+    *out = s_clk;
+    unlock();
 }
 
 int zone_store_holiday_all(unsigned hours)
@@ -1298,6 +1429,25 @@ zone_err_t zone_store_set_poll_interval(uint32_t ms)
         }
         nvs_close(h);
     }
+    return err == ESP_OK ? ZONE_OK : ZONE_ERR_STORAGE;
+}
+
+zone_err_t zone_store_set_master(uint8_t addr)
+{
+    if (addr < ZONE_MASTER_MIN || addr > ZONE_MASTER_MAX) {
+        return ZONE_ERR_RANGE;
+    }
+    hm_bus_set_master(addr); /* the poller picks it up before its next frame */
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
+    if (err == ESP_OK) {
+        err = nvs_set_u8(h, NVS_MASTER, addr);
+        if (err == ESP_OK) {
+            err = nvs_commit(h);
+        }
+        nvs_close(h);
+    }
+    ESP_LOGI(TAG, "master address now 0x%02X", addr);
     return err == ESP_OK ? ZONE_OK : ZONE_ERR_STORAGE;
 }
 

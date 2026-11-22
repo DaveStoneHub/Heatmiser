@@ -693,6 +693,7 @@ static void show(ui_screen_t s)
 
 void ui_show_dash(void)
 {
+    ui_pin_lock(); /* settings ask for the PIN again */
     show(UI_SCREEN_DASH);
 }
 
@@ -734,14 +735,24 @@ void ui_show_rename(uint8_t addr)
     }
 }
 
-void ui_show_settings(void)
+static void show_settings(void)
 {
     show(UI_SCREEN_SETTINGS);
 }
 
-void ui_show_zones(void)
+void ui_show_settings(void)
+{
+    ui_with_pin(show_settings);
+}
+
+static void show_zones(void)
 {
     show(UI_SCREEN_ZONES);
+}
+
+void ui_show_zones(void)
+{
+    ui_with_pin(show_zones);
 }
 
 void ui_show_diag(void)

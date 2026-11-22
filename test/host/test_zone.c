@@ -465,8 +465,67 @@ static void test_setpoint_restore(void)
     CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
 }
 
+static void test_clock_sync(void)
+{
+    zone_view_t v;
+    heat_view(&v); /* the stat says Wed 12:00 */
+
+    /* Drift, folded round the week. */
+    CHECK_EQ(zone_clock_drift_min(&v, 3, 12 * 60), 0);
+    CHECK_EQ(zone_clock_drift_min(&v, 3, 12 * 60 + 5), 5);
+    CHECK_EQ(zone_clock_drift_min(&v, 3, 11 * 60 + 57), 3);
+    CHECK_EQ(zone_clock_drift_min(&v, 4, 12 * 60), 1440);       /* a day out */
+    v.clk_wday = 7;
+    v.clk_hour = 23;
+    v.clk_min = 59;
+    CHECK_EQ(zone_clock_drift_min(&v, 1, 0), 1);                /* across Sunday midnight */
+    CHECK_EQ(zone_clock_drift_min(&v, 1, 1), 2);
+    v.clk_wday = 0;
+    CHECK_EQ(zone_clock_drift_min(&v, 1, 0), -1);               /* no clock */
+    heat_view(&v);
+    v.have = false;
+    CHECK_EQ(zone_clock_drift_min(&v, 3, 12 * 60), -1);
+    heat_view(&v);
+    CHECK_EQ(zone_clock_drift_min(&v, 0, 12 * 60), -1);         /* the bridge has no time */
+
+    /* Daily at 03:10, once a day. */
+    zone_clock_in_t in = { .minute = 3 * 60 + 9, .day = 100, .last_day = 99, .since_min = -1, .drift_min = 0 };
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
+    in.minute = 3 * 60 + 10;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DAILY);
+    in.minute = 20 * 60;                                        /* later the same day, not done yet */
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DAILY);
+    in.last_day = 100;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);               /* done today */
+    in.last_day = -1;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DAILY);
+
+    /* Drift sets it at any time, and beats the daily slot. */
+    in = (zone_clock_in_t){ .minute = 14 * 60, .day = 100, .last_day = 100, .since_min = -1, .drift_min = 2 };
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
+    in.drift_min = 3;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DRIFT);
+    in.minute = 1 * 60;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DRIFT);
+
+    /* At most once every 15 minutes, however far out. */
+    in.since_min = 0;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
+    in.since_min = 14;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
+    in.since_min = 15;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_DRIFT);
+
+    /* Not read yet or no clock: never. */
+    in.drift_min = -1;
+    in.last_day = -1;
+    in.minute = 4 * 60;
+    CHECK_EQ(zone_clock_due(&in), ZONE_CLOCK_NO);
+}
+
 void test_zone_all(void)
 {
+    test_clock_sync();
     test_setpoint_restore();
     test_hw_switch_plan();
     test_hw_blob();

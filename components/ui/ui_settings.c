@@ -68,7 +68,7 @@ static void show_values(void)
     } else {
         lv_label_set_text_fmt(s_val[T_BLANK], "%u s", (unsigned)b);
     }
-    lv_label_set_text(s_val[T_PIN], "Off");
+    lv_label_set_text(s_val[T_PIN], ui_platform_pin_enabled() ? "On" : "Off");
 }
 
 static void show_wifi(void)
@@ -106,6 +106,18 @@ static void pick_blank(int i)
     show_values();
 }
 
+/* Eight of the 32 master addresses (0x81-0xA0): enough to step aside from
+ * another master's address. The console's 'master' command reaches the rest
+ * for a test, without saving. */
+static const char *const s_master_names[] = { "0x81", "0x82", "0x83", "0x84", "0x85", "0x86", "0x87", "0x88" };
+#define N_MASTERS (sizeof s_master_names / sizeof s_master_names[0])
+
+static void pick_master(int i)
+{
+    ui_report(zone_store_set_master((uint8_t)(ZONE_MASTER_MIN + i)), "Master address");
+    show_values();
+}
+
 static void tile_event(lv_event_t *e)
 {
     static const char *tz_names[16];
@@ -130,9 +142,13 @@ static void tile_event(lv_event_t *e)
         ui_choose("Poll each stat every", s_poll_names, N_POLLS, sel, pick_poll);
         break;
     }
-    case T_MASTER:
-        ui_toast("The bridge talks as master 0x81. Changing it comes later.");
+    case T_MASTER: {
+        zone_bus_info_t bi;
+        zone_store_bus_info(&bi);
+        ui_choose("Bridge address on the bus", s_master_names, N_MASTERS, (int)bi.master - ZONE_MASTER_MIN,
+                  pick_master);
         break;
+    }
     case T_BLANK: {
         int sel = -1;
         for (size_t i = 0; i < N_BLANKS; i++) {
@@ -142,7 +158,7 @@ static void tile_event(lv_event_t *e)
         break;
     }
     case T_PIN:
-        ui_toast("A PIN for settings comes in a later milestone");
+        ui_pin_setup(show_values);
         break;
     }
 }

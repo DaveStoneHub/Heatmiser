@@ -13,6 +13,8 @@
 #include "net.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "esp_random.h"
+#include "ota.h"
 #include "ui.h"
 
 void ui_platform_sys_info(ui_sys_info_t *o)
@@ -110,4 +112,105 @@ bool ui_platform_matter_open_window(void)
 bool ui_platform_matter_remove_fabric(uint8_t index)
 {
     return matter_bridge_remove_fabric(index) == ESP_OK;
+}
+
+/* ---- the settings PIN ----------------------------------------------------------
+ * Saved as "ui"/"pin": an 8-byte random salt and a 64-bit hash of salt and
+ * PIN (FNV-1a, run 4096 times). Four digits are only 10,000 guesses, so no
+ * hash can protect them from someone with the flash; this keeps the PIN out
+ * of plain sight, and the keypad's lockout slows guessing at the screen. */
+#define PIN_SALT 8
+
+static uint64_t pin_hash(const uint8_t salt[PIN_SALT], const char *pin)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (int r = 0; r < 4096; r++) {
+        for (int i = 0; i < PIN_SALT; i++) {
+            h = (h ^ salt[i]) * 1099511628211ull;
+        }
+        for (const char *p = pin; *p; p++) {
+            h = (h ^ (uint8_t)*p) * 1099511628211ull;
+        }
+    }
+    return h;
+}
+
+static bool pin_load(uint8_t blob[PIN_SALT + 8])
+{
+    nvs_handle_t h;
+    if (nvs_open("ui", NVS_READONLY, &h) != ESP_OK) {
+        return false;
+    }
+    size_t len = PIN_SALT + 8;
+    const bool ok = nvs_get_blob(h, "pin", blob, &len) == ESP_OK && len == PIN_SALT + 8;
+    nvs_close(h);
+    return ok;
+}
+
+bool ui_platform_pin_enabled(void)
+{
+    uint8_t b[PIN_SALT + 8];
+    return pin_load(b);
+}
+
+bool ui_platform_pin_check(const char *pin)
+{
+    uint8_t b[PIN_SALT + 8];
+    if (!pin_load(b)) {
+        return true;
+    }
+    const uint64_t want = pin_hash(b, pin);
+    return memcmp(&want, b + PIN_SALT, 8) == 0;
+}
+
+bool ui_platform_pin_save(const char *pin)
+{
+    nvs_handle_t h;
+    if (nvs_open("ui", NVS_READWRITE, &h) != ESP_OK) {
+        return false;
+    }
+    esp_err_t err;
+    if (pin && pin[0]) {
+        uint8_t b[PIN_SALT + 8];
+        esp_fill_random(b, PIN_SALT);
+        const uint64_t hv = pin_hash(b, pin);
+        memcpy(b + PIN_SALT, &hv, 8);
+        err = nvs_set_blob(h, "pin", b, sizeof b);
+    } else {
+        err = nvs_erase_key(h, "pin");
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            err = ESP_OK;
+        }
+    }
+    if (err == ESP_OK) {
+        err = nvs_commit(h);
+    }
+    nvs_close(h);
+    ESP_LOGI("ui", "settings PIN %s", pin && pin[0] ? "set" : "turned off");
+    return err == ESP_OK;
+}
+
+/* ---- firmware updates ------------------------------------------------------------ */
+
+void ui_platform_ota_info(ui_ota_info_t *o)
+{
+    ota_status_t st;
+    ota_status(&st);
+    memset(o, 0, sizeof *o);
+    o->state = (ui_ota_state_t)st.state;
+    snprintf(o->running, sizeof o->running, "%s", st.running);
+    snprintf(o->latest, sizeof o->latest, "%s", st.latest);
+    o->percent = st.percent;
+    snprintf(o->error, sizeof o->error, "%s", st.error);
+    o->on_trial = st.on_trial;
+}
+
+bool ui_platform_ota_check(void)
+{
+    return ota_check() == ESP_OK;
+}
+
+bool ui_platform_ota_install(void)
+{
+    return ota_install(NULL) == ESP_OK;
 }
