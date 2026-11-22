@@ -56,8 +56,11 @@ release tagged. Section 6 is the week.
   rest for a test, but doesn't save it.
 
 **`sdkconfig.defaults` changed** (rollback, updates over HTTP, the
-certificate bundle), and rollback needs a new bootloader. So this time,
-delete `sdkconfig` and flash the whole board over USB:
+certificate bundle, and more internal RAM for Bluetooth: its controller code
+out of IRAM and 8 Wi-Fi transmit buffers instead of 16), and rollback needs a
+new bootloader. So this time, delete `sdkconfig` and flash the whole board
+over USB. An older `sdkconfig` stops the build with "delete sdkconfig and
+build again".
 
 ## 0. Build and flash
 
@@ -74,6 +77,10 @@ At boot, look for:
 ```
 ota: running <version> from ota_0
 ```
+
+The boot log also shows `BLE_INIT: Put all controller code in flash` with
+no `Malloc failed` after it, and `main: RAM after Matter and Wi-Fi: ...`
+then `console ready`.
 
 Type `health`. You should get one line like this:
 
