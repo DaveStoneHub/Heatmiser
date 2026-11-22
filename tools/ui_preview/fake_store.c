@@ -340,11 +340,22 @@ void zone_store_clear_counters(void) {}
 
 zone_err_t zone_store_read_now(uint8_t addr) { return s_used[addr - 1] ? ZONE_OK : ZONE_ERR_ADDR; }
 
+static uint8_t s_master = 0x81;
+
 void zone_store_bus_info(zone_bus_info_t *out)
 {
     out->poll_ms = s_poll_ms;
-    out->master = 0x81;
+    out->master = s_master;
     out->baud = 4800;
+}
+
+zone_err_t zone_store_set_master(uint8_t addr)
+{
+    if (addr < ZONE_MASTER_MIN || addr > ZONE_MASTER_MAX) {
+        return ZONE_ERR_RANGE;
+    }
+    s_master = addr;
+    return ZONE_OK;
 }
 
 zone_err_t zone_store_set_poll_interval(uint32_t ms)
@@ -370,4 +381,9 @@ bool zone_store_pop_notice(char *buf, size_t cap)
     snprintf(buf, cap, "%s", s_notice);
     s_notice[0] = 0;
     return true;
+}
+
+void zone_store_clock_info(zone_clock_info_t *out)
+{
+    memset(out, 0, sizeof *out);
 }

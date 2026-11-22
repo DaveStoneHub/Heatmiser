@@ -381,11 +381,16 @@ static void settings_event(lv_event_t *e)
     ui_show_settings();
 }
 
+static void scan_and_show(void)
+{
+    zone_store_scan();
+    ui_show_zones();
+}
+
 static void scan_now_event(lv_event_t *e)
 {
     (void)e;
-    zone_store_scan();
-    ui_show_zones();
+    ui_with_pin(scan_and_show);
 }
 
 static lv_obj_t *dash_create(void)

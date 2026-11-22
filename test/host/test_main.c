@@ -564,6 +564,7 @@ int main(void)
     test_sched_all();
     test_zone_all();
     test_matter_all();
+    test_ota_all();
 
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

@@ -1,7 +1,8 @@
 /*
  * Heatmiser bridge: the RS485 poller (milestones 1 and 2) with the zone store,
- * the touchscreen (milestone 3) and the Matter bridge (milestones 4 and 5), plus the
- * bench console.
+ * the touchscreen (milestone 3), the Matter bridge (milestones 4 and 5), and
+ * clock sync, settings PIN, firmware updates and the health line (milestone
+ * 6), plus the bench console.
  *
  * Connect a terminal to the board's console (115200 baud) and type "help".
  */
@@ -17,10 +18,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "hm_bus.h"
+#include "health.h"
 #include "hm_poller.h"
 #include "matter_bridge.h"
 #include "net.h"
 #include "nvs_flash.h"
+#include "ota.h"
 #include "ui.h"
 #include "zone_store.h"
 
@@ -45,6 +48,9 @@ void app_main(void)
     if (zone_store_init() < 0) {
         ESP_LOGE(TAG, "zone store failed to start");
     }
+
+    /* A new firmware from an update is on trial until the bus answers. */
+    ota_init(health_ok);
 
     /* The screen. A display fault must not stop the bus, so carry on without it. */
     lv_display_t *disp = NULL;
@@ -80,6 +86,7 @@ void app_main(void)
     poll_register_commands();
     ui_register_commands();
     matter_register_command();
+    health_register_commands();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
@@ -95,7 +102,7 @@ void app_main(void)
 #endif
 
     printf("\nHeatmiser RS485 bridge. Default stat %d, master 0x%02X.\n"
-           "Milestone 5: matter, hw, zone, wifi. Type 'help' for all.\n\n",
+           "Milestone 6: health, ota, pin, matter, zone. Type 'help' for all.\n\n",
            CONFIG_HM_BUS_DEFAULT_STAT, cfg.master_addr);
     ESP_LOGI(TAG, "console ready");
     ESP_ERROR_CHECK(esp_console_start_repl(repl));

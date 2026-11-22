@@ -1,0 +1,77 @@
+name: Release
+
+# Push a tag like v0.6.1 on main to publish a release. The bridge's "Check for
+# update" (System screen, or 'ota check') finds the latest release and
+# downloads its heatmiser_bridge.bin.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish the firmware
+    # The same self-hosted runner and ESP-IDF cache as CI. Only people who
+    # can push tags to this repository can start it.
+    runs-on: [self-hosted, linux]
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      IDF_VERSION: v6.1.1
+      CI_CACHE: ${{ github.workspace }}/../../_heatmiser-ci-cache
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag is on main
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME is not on main; releases come from main only."
+            exit 1
+          fi
+      - name: Install ESP-IDF ${{ env.IDF_VERSION }} (first run only)
+        run: |
+          set -euo pipefail
+          idf="$CI_CACHE/esp-idf-$IDF_VERSION"
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          if [ ! -f "$idf/.ci-installed" ]; then
+            rm -rf "$idf"
+            mkdir -p "$CI_CACHE"
+            git clone --quiet --depth 1 --branch "$IDF_VERSION" \
+              --recurse-submodules --shallow-submodules \
+              https://github.com/espressif/esp-idf.git "$idf"
+            "$idf/install.sh" esp32s3
+            touch "$idf/.ci-installed"
+          fi
+      - name: Build
+        env:
+          HM_FW_VERSION: ${{ github.ref_name }}
+        run: |
+          set -eo pipefail
+          export IDF_TOOLS_PATH="$CI_CACHE/espressif"
+          . "$CI_CACHE/esp-idf-$IDF_VERSION/export.sh" >/dev/null
+          export IDF_COMPONENT_CACHE_PATH="$CI_CACHE/components"
+          if command -v ccache >/dev/null; then
+            export IDF_CCACHE_ENABLE=1 CCACHE_DIR="$CI_CACHE/ccache" CCACHE_MAXSIZE=5G
+          fi
+          idf.py set-target esp32s3
+          idf.py build
+          # The image must say the tag it is released as, or bridges would
+          # offer the same release again.
+          ver=$(python -c "import json;print(json.load(open('build/project_description.json'))['project_version'])")
+          test "$ver" = "$GITHUB_REF_NAME" || { echo "::error::Built version $ver, tag $GITHUB_REF_NAME"; exit 1; }
+          cd build && sha256sum heatmiser_bridge.bin > heatmiser_bridge.bin.sha256
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/heatmiser_bridge.bin
+            build/heatmiser_bridge.bin.sha256
+          generate_release_notes: true

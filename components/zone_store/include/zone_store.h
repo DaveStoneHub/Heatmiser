@@ -97,6 +97,15 @@ zone_err_t zone_store_set_hw_timer(uint8_t addr, int day, const hm_period_t on[4
 int zone_store_sync_clocks(void);
 int zone_store_holiday_all(unsigned hours);
 
+/* The automatic clock sync runs by itself once the bridge has the time: see
+ * zone_clock_due() in zone_view.h. Its totals since boot: */
+typedef struct {
+    uint32_t ok, failed;         /* clock writes confirmed / failed, by hand or automatic */
+    uint32_t auto_runs;          /* automatic syncs started */
+    uint32_t last_utc;           /* last confirmed clock write, 0 = none */
+} zone_clock_info_t;
+void zone_store_clock_info(zone_clock_info_t *out);
+
 /* Scan addresses 1-32. Stats that answer join the list; zones that do not
  * answer stay (remove them by hand). */
 void zone_store_scan(void);
@@ -144,6 +153,10 @@ typedef struct {
 void zone_store_bus_info(zone_bus_info_t *out);
 /* Poll interval, 2-120 s, saved. */
 zone_err_t zone_store_set_poll_interval(uint32_t ms);
+/* The bridge's own address on the bus, 0x81-0xA0 (V3 masters), saved. */
+#define ZONE_MASTER_MIN 0x81
+#define ZONE_MASTER_MAX 0xA0
+zone_err_t zone_store_set_master(uint8_t addr);
 
 /* Messages for the user: a failed write, a scan result. Returns false when
  * there are none. */

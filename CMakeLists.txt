@@ -10,6 +10,12 @@ cmake_minimum_required(VERSION 3.16)
 if(CMAKE_HOST_WIN32)
   set(CMAKE_NINJA_FORCE_RESPONSE_FILE ON CACHE BOOL "" FORCE)
 endif()
+# A release build is versioned by its tag (the release workflow sets
+# HM_FW_VERSION); otherwise ESP-IDF uses git describe. The bridge compares
+# this with the latest release's tag to offer an update.
+if(DEFINED ENV{HM_FW_VERSION} AND NOT "$ENV{HM_FW_VERSION}" STREQUAL "")
+  set(PROJECT_VER "$ENV{HM_FW_VERSION}")
+endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(heatmiser_bridge)
 

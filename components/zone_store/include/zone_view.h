@@ -158,6 +158,36 @@ uint8_t zone_comfort_at(const hm_period_t p[4], int m);
  * clock. */
 bool zone_setpoint_to_restore(const zone_view_t *v, int new_wday, int new_minute, uint8_t *out);
 
+/* ---- automatic clock sync ----------------------------------------------
+ * The stats have no clock source of their own, so the bridge sets them: once
+ * a day at ZONE_CLOCK_DAILY_MIN local time (after the summer time changes at
+ * 01:00 and 02:00), and at any time a stat's clock is more than
+ * ZONE_CLOCK_DRIFT_MIN minutes out (after a power cut at the stat, or when
+ * the bridge first gets the time after a restart). A stat is set at most
+ * once every ZONE_CLOCK_RETRY_MIN minutes, so one that ignores the write is
+ * not written every minute. */
+#define ZONE_CLOCK_DAILY_MIN  (3 * 60 + 10)
+#define ZONE_CLOCK_DRIFT_MIN  2
+#define ZONE_CLOCK_RETRY_MIN  60
+
+/* How many minutes the stat's clock is out from the bridge's, folded round
+ * the week. wday (1-7 = Mon-Sun) and minute (0-1439) are the bridge's local
+ * time when the stat was read. -1 if the stat has no clock or was never read. */
+int zone_clock_drift_min(const zone_view_t *v, int wday, int minute);
+
+typedef struct {
+    int      minute;                /* local time now, 0-1439 */
+    int32_t  day;                   /* local date now (any number that changes at midnight) */
+    int32_t  last_day;              /* date of the stat's last confirmed sync, -1 = none */
+    int32_t  since_min;             /* minutes since its last clock write was queued, -1 = none */
+    int      drift_min;             /* zone_clock_drift_min(), -1 = not known */
+} zone_clock_in_t;
+
+typedef enum { ZONE_CLOCK_NO = 0, ZONE_CLOCK_DAILY, ZONE_CLOCK_DRIFT } zone_clock_why_t;
+
+/* Whether the stat should have its clock set now, and why. */
+zone_clock_why_t zone_clock_due(const zone_clock_in_t *in);
+
 /* Whether hot water is on at minute m given a day's on/off pairs. */
 bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m);
 

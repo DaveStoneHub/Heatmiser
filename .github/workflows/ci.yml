@@ -148,3 +148,7 @@ jobs:
         run: test "$(python tools/hm_frame.py read 1)" = "01 0A 81 00 00 00 FF FF 2C 09"
       - name: Soak logger parses a log
         run: python -m py_compile tools/soak_logger.py
+      - name: Week logger passes its self-test
+        run: python tools/week_logger.py --self-test
+      - name: OTA server compiles
+        run: python -m py_compile tools/ota_serve.py

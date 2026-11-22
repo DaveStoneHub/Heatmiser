@@ -1,0 +1,24 @@
+menu "Heatmiser firmware updates"
+
+    config HM_OTA_REPO
+        string "GitHub repository with the releases"
+        default "davestonehub/heatmiser"
+        help
+            The bridge looks for the latest release of this repository
+            (owner/name). It must be public: the bridge has no token.
+
+    config HM_OTA_ASSET
+        string "Firmware file attached to each release"
+        default "heatmiser_bridge.bin"
+
+    config HM_OTA_VERIFY_S
+        int "Seconds a new firmware must run healthy before it is kept"
+        range 30 600
+        default 90
+
+    config HM_OTA_ROLLBACK_S
+        int "Seconds after which an unhealthy new firmware is rolled back"
+        range 120 1800
+        default 300
+
+endmenu
