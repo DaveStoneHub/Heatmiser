@@ -30,6 +30,9 @@
 #if CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING
 #error "CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING is on, from an old sdkconfig: delete sdkconfig and build again"
 #endif
+#if !CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY
+#error "CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY is off, from an old sdkconfig: delete sdkconfig and build again"
+#endif
 
 #if __has_include(<setup_payload/OnboardingCodesUtil.h>)
 #include <setup_payload/OnboardingCodesUtil.h>

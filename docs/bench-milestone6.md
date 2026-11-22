@@ -56,8 +56,12 @@ release tagged. Section 6 is the week.
   rest for a test, but doesn't save it.
 
 **`sdkconfig.defaults` changed** (rollback, updates over HTTP, the
-certificate bundle), and rollback needs a new bootloader. So this time,
-delete `sdkconfig` and flash the whole board over USB:
+certificate bundle, and more internal RAM for Bluetooth: its controller code
+out of IRAM, 8 Wi-Fi transmit buffers instead of 16, and buffers over 1 KB
+in PSRAM), and rollback needs a
+new bootloader. So this time, delete `sdkconfig` and flash the whole board
+over USB. An older `sdkconfig` stops the build with "delete sdkconfig and
+build again".
 
 ## 0. Build and flash
 
@@ -74,6 +78,11 @@ At boot, look for:
 ```
 ota: running <version> from ota_0
 ```
+
+The boot log also shows `BLE_INIT: Put all controller code in flash` with
+no `Malloc failed` after it, and `main: RAM after Matter and Wi-Fi: ...`
+then `console ready`. Type `display`: its last line should show internal
+RAM free, with the lowest since boot above about 10,000 bytes.
 
 Type `health`. You should get one line like this:
 
@@ -95,10 +104,13 @@ write: any that were more than 2 minutes out. The log shows
    `stat N: clock is 10 min out; setting it`, and the stat's display should
    show the right time again. If that stat's clock was set in the last 15
    minutes (at boot, say), allow up to 15 minutes.
-3. On a stat with a setpoint override (turn its dial up 2 degrees first),
-   repeat steps 1 and 2 on that stat. After the clock write the log should
-   show `stat N: setpoint 23 written back after the clock write`, and the
-   stat should keep the raised setpoint.
+3. Pick a stat the bridge hasn't set in the last 15 minutes. Set its clock
+   10 minutes wrong first, then straight away turn its setpoint up 2
+   degrees, all within about a minute. (Changing the clock at the stat
+   itself drops an override, so the setpoint has to go up after the clock
+   change.) After the bridge's clock write the log should show
+   `stat N: setpoint 23 written back after the clock write`, and the stat
+   should keep the raised setpoint.
 4. Run `health` and check that `clk_ok` went up by 2 and `clk_fail` is 0.
 
 The daily sync happens at 03:10, so you'll see it in the week log (section

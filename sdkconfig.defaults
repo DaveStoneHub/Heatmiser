@@ -29,6 +29,11 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# malloc() puts blocks over 1 KB in PSRAM first (the default is 16 KB), so
+# buffers such as an update's HTTP buffers leave internal RAM to Wi-Fi,
+# Bluetooth and task stacks. What must work while flash is written (the
+# screen's interrupt and its buffers) asks for internal RAM by name.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=1024
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
@@ -82,6 +87,17 @@ CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 CONFIG_LWIP_IRAM_OPTIMIZATION=n
 # One BLE connection is all commissioning needs.
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+# The Bluetooth controller's code runs from PSRAM like the rest (XIP), not
+# IRAM: about 20 KB more internal RAM. Without it, Wi-Fi and the Matter stack
+# left the controller about 4 KB, and it failed to start (milestone 6 bench).
+# Code from PSRAM keeps running while flash is written, so this is safe here.
+CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY=y
+# Advertising plus one connection; each controller instance takes 828 bytes.
+CONFIG_BT_CTRL_BLE_MAX_ACT=4
+# Wi-Fi copies each outgoing frame into one of its static transmit buffers,
+# 1.6 KB of internal RAM each, taken at start. Eight instead of 16 gives back
+# about 13 KB; a frame that finds none free waits in the cache queue.
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
 # The generated data model (esp-matter 1.5 and later); the bridge is written to it.
 CONFIG_ESP_MATTER_ENABLE_GENERATED_DATA_MODEL=y
 # 32 stats, the PRT/HW-N's hot water endpoint (milestone 5) and a spare.
