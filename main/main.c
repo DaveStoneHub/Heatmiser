@@ -29,6 +29,12 @@
 #include "ui.h"
 #include "zone_store.h"
 
+/* An sdkconfig from before milestone 6's RAM fixes keeps the old malloc
+ * threshold, and then Bluetooth runs out of internal RAM at boot. */
+#if CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL > 1024
+#error "CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL is over 1024, from an old sdkconfig: delete sdkconfig and build again"
+#endif
+
 static const char *TAG = "main";
 
 /* Any allocation that fails, with its size and kind, and what was free. */

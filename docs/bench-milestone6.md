@@ -57,7 +57,8 @@ release tagged. Section 6 is the week.
 
 **`sdkconfig.defaults` changed** (rollback, updates over HTTP, the
 certificate bundle, and more internal RAM for Bluetooth: its controller code
-out of IRAM and 8 Wi-Fi transmit buffers instead of 16), and rollback needs a
+out of IRAM, 8 Wi-Fi transmit buffers instead of 16, and buffers over 1 KB
+in PSRAM), and rollback needs a
 new bootloader. So this time, delete `sdkconfig` and flash the whole board
 over USB. An older `sdkconfig` stops the build with "delete sdkconfig and
 build again".
@@ -80,7 +81,8 @@ ota: running <version> from ota_0
 
 The boot log also shows `BLE_INIT: Put all controller code in flash` with
 no `Malloc failed` after it, and `main: RAM after Matter and Wi-Fi: ...`
-then `console ready`.
+then `console ready`. Type `display`: its last line should show internal
+RAM free, with the lowest since boot above about 10,000 bytes.
 
 Type `health`. You should get one line like this:
 
