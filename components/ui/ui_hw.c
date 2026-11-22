@@ -164,7 +164,11 @@ static void hw_refresh(uint32_t dirty)
         lv_obj_set_style_text_color(s_boost_state, C_MUTED, 0);
     }
 
-    const int sel = v.hw_mode == ZONE_HW_ON ? 1 : v.hw_mode == ZONE_HW_OFF ? 2 : v.hw_mode == ZONE_HW_TIMER ? 0 : -1;
+    /* A held off (from Matter, ending with the timer period) is not the
+     * Force off button's open-ended off, so like a boost it lights none. */
+    const bool held_off = v.hw_mode == ZONE_HW_OFF && v.boost_left_min;
+    const int sel = v.hw_mode == ZONE_HW_ON ? 1 : v.hw_mode == ZONE_HW_OFF && !held_off ? 2
+                    : v.hw_mode == ZONE_HW_TIMER ? 0 : -1;
     for (int i = 0; i < 3; i++) {
         ui_enable(s_mode[i], live);
         ui_btn_kind(s_mode[i], i == sel ? UI_BTN_SOLID : UI_BTN_PLAIN);

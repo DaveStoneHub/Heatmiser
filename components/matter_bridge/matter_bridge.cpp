@@ -39,6 +39,7 @@
 #include <app-common/zap-generated/ids/Attributes.h>
 #include <app-common/zap-generated/ids/Clusters.h>
 #include <app/server/Server.h>
+#include <lib/support/logging/CHIPLogging.h>
 #include <credentials/FabricTable.h>
 #include <platform/CHIPDeviceLayer.h>
 
@@ -551,6 +552,38 @@ void sync(uint32_t dirty)
     }
 }
 
+/* The Matter SDK's own ESP32 logger prints each line's header ("I (5230)
+ * chip[EM]: ") with printf and only the text through esp_log, so a tag
+ * turned down with esp_log_level_set() still leaves a bare header behind.
+ * This prints the whole line only when the tag's level allows it. */
+void chip_log(const char *module, uint8_t category, const char *msg, va_list args)
+{
+    char tag[16];
+    snprintf(tag, sizeof tag, "chip[%s]", module);
+    esp_log_level_t lvl;
+    char c;
+    switch (category) {
+    case chip::Logging::kLogCategory_Error:
+        lvl = ESP_LOG_ERROR;
+        c = 'E';
+        break;
+    case chip::Logging::kLogCategory_Progress:
+        lvl = ESP_LOG_INFO;
+        c = 'I';
+        break;
+    default:
+        lvl = ESP_LOG_DEBUG;
+        c = 'D';
+        break;
+    }
+    if (esp_log_level_get(tag) < lvl) {
+        return;
+    }
+    printf("%c (%lu) %s: ", c, (unsigned long)esp_log_timestamp(), tag);
+    vprintf(msg, args);
+    printf("\n");
+}
+
 } // namespace
 static void refresh_status(void);
 namespace {
@@ -602,6 +635,7 @@ extern "C" esp_err_t matter_bridge_start(void)
     esp_log_level_set("chip[EM]", ESP_LOG_WARN);
     esp_log_level_set("chip[IM]", ESP_LOG_WARN);
     esp_log_level_set("chip[DMG]", ESP_LOG_WARN);
+    chip::Logging::SetLogRedirectCallback(chip_log);
     ESP_LOGI(TAG, "internal RAM before start: %u free, largest block %u, DMA %u",
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
