@@ -109,6 +109,7 @@ void fake_set_boost(uint8_t addr, unsigned left)
     zone_view_t *v = &s_z[addr - 1];
     v->hw_mode = left ? ZONE_HW_BOOST : ZONE_HW_TIMER;
     v->boost_left_min = (uint16_t)left;
+    v->boost_len_min = (uint16_t)left;
     v->hw_on = left ? true : v->hw_on;
     s_dirty |= 1u << (addr - 1);
 }
@@ -224,6 +225,7 @@ zone_err_t zone_store_set_hw(uint8_t addr, int cmd)
         zone_view_t *v = &s_z[addr - 1];
         v->hw_mode = cmd == HM_HW_FORCE_ON ? ZONE_HW_ON : cmd == HM_HW_FORCE_OFF ? ZONE_HW_OFF : ZONE_HW_TIMER;
         v->boost_left_min = 0;
+        v->boost_len_min = 0;
         if (cmd != HM_HW_FOLLOW_TIMER) {
             v->hw_on = cmd == HM_HW_FORCE_ON;
         }
@@ -326,9 +328,10 @@ size_t zone_store_frames(zone_frame_t *out, size_t max)
             continue;
         }
         r->len = 75;
-        r->n = 10;
-        const uint8_t rx[10] = { 0x81, 0x4B, 0, a, 0, 0, 0, 0x40, 0, 0x41 };
-        memcpy(r->b, rx, 10);
+        r->n = sizeof r->b;
+        const uint8_t rx[] = { 0x81, 0x4B, 0, a, 0, 0, 0, 0x40, 0, 0x41, 0x00, 0x00, 0x02, 0x01, 0x00, 0x01,
+                               0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x15, 0x07 };
+        memcpy(r->b, rx, sizeof rx < sizeof r->b ? sizeof rx : sizeof r->b);
     }
     return n;
 }

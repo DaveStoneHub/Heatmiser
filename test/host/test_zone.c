@@ -350,7 +350,7 @@ static void test_hw_switch_plan(void)
 
 static void test_hw_blob(void)
 {
-    const zone_hw_saved_t in[2] = { { 3, ZONE_HW_BOOST, 1795000000u }, { 9, ZONE_HW_ON, 0 } };
+    const zone_hw_saved_t in[2] = { { 3, ZONE_HW_BOOST, 1795000000u, 30 }, { 9, ZONE_HW_ON, 0, 0 } };
     zone_hw_saved_t out[HM_SCHED_MAX_STATS];
     uint8_t blob[ZONE_HW_BLOB_MAX];
     size_t n = zone_hw_encode(in, 2, blob, sizeof blob);
@@ -359,12 +359,21 @@ static void test_hw_blob(void)
     CHECK_EQ(out[0].addr, 3);
     CHECK_EQ(out[0].mode, ZONE_HW_BOOST);
     CHECK(out[0].end_utc == 1795000000u);
+    CHECK_EQ(out[0].len_min, 30);
     CHECK_EQ(out[1].addr, 9);
     CHECK_EQ(out[1].mode, ZONE_HW_ON);
     CHECK(out[1].end_utc == 0);
     CHECK_EQ(zone_hw_decode(blob, n - 1, out, HM_SCHED_MAX_STATS), -1);
-    blob[0] = 2;
+    blob[0] = 3;
     CHECK_EQ(zone_hw_decode(blob, n, out, HM_SCHED_MAX_STATS), -1);
+    /* Milestone 5 saved version 1, without the length. */
+    const uint8_t v1[2 + ZONE_HW_ENTRY_SIZE_V1] = { 1, 1, 4, ZONE_HW_BOOST, 0x10, 0x32, 0xFD, 0x6A };
+    CHECK_EQ(zone_hw_decode(v1, sizeof v1, out, HM_SCHED_MAX_STATS), 1);
+    CHECK_EQ(out[0].addr, 4);
+    CHECK_EQ(out[0].mode, ZONE_HW_BOOST);
+    CHECK(out[0].end_utc == 0x6AFD3210u);
+    CHECK_EQ(out[0].len_min, 0);
+    CHECK_EQ(zone_hw_decode(v1, sizeof v1 - 1, out, HM_SCHED_MAX_STATS), -1);
     blob[0] = ZONE_HW_BLOB_VERSION;
     blob[2] = 0; /* address 0 */
     CHECK_EQ(zone_hw_decode(blob, n, out, HM_SCHED_MAX_STATS), -1);
@@ -372,8 +381,93 @@ static void test_hw_blob(void)
     CHECK_EQ(zone_hw_decode(blob, 2, out, HM_SCHED_MAX_STATS), 0);
 }
 
+static void heat_view(zone_view_t *v)
+{
+    /* Heating on a 5/2 programme, clock Wednesday 12:00 (17 deg until 17:00). */
+    memset(v, 0, sizeof *v);
+    v->cfg.addr = 2;
+    v->link = HM_LINK_ONLINE;
+    v->have = true;
+    v->mode = HM_MODE_HEAT;
+    v->comfort_days = 2;
+    const hm_period_t c[4] = { { 6, 30, 21 }, { 8, 30, 17 }, { 17, 0, 21 }, { 22, 30, 16 } };
+    memcpy(v->comfort[0], c, sizeof c);
+    memcpy(v->comfort[1], c, sizeof c);
+    v->clk_wday = 3;
+    v->clk_hour = 12;
+    v->clk_min = 0;
+    v->set_temp = 17;
+}
+
+static void test_setpoint_restore(void)
+{
+    zone_view_t v;
+    uint8_t c = 0;
+
+    /* Following the programme: nothing to put back. */
+    heat_view(&v);
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60 + 2, &c));
+
+    /* An override from the dial, Matter or the stat goes back after the clock. */
+    v.set_temp = 23;
+    CHECK(zone_setpoint_to_restore(&v, 3, 12 * 60 + 2, &c));
+    CHECK_EQ(c, 23);
+
+    /* One still being written counts too. */
+    heat_view(&v);
+    v.pend.set_temp = true;
+    v.pend.set_temp_c = 19;
+    c = 0;
+    CHECK(zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    CHECK_EQ(c, 19);
+
+    /* The stat's clock was slow and the right time is past the next comfort
+     * level: the override would have ended, so let it. */
+    heat_view(&v);
+    v.set_temp = 23;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 17 * 60 + 5, &c));
+    CHECK(!zone_setpoint_to_restore(&v, 6, 12 * 60, &c));   /* weekend now */
+    /* ...unless a temperature hold keeps it. */
+    v.hold_min = 90;
+    CHECK(zone_setpoint_to_restore(&v, 3, 17 * 60 + 5, &c));
+    CHECK_EQ(c, 23);
+
+    /* Before the first level, last night's level is in force; the evening
+     * period of the same day is a different one. */
+    heat_view(&v);
+    v.clk_hour = 3;
+    v.set_temp = 20;
+    CHECK(zone_setpoint_to_restore(&v, 3, 3 * 60 + 1, &c));
+    CHECK(!zone_setpoint_to_restore(&v, 3, 23 * 60, &c));
+
+    /* Frost, off, holiday, a mode change, no programme or no clock: leave it. */
+    heat_view(&v);
+    v.set_temp = 23;
+    v.mode = HM_MODE_FROST;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.mode = HM_MODE_OFF;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.mode = HM_MODE_HEAT;
+    v.holiday_h = 48;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.holiday_h = 0;
+    v.pend.mode = true;
+    v.pend.mode_v = HM_MODE_HEAT;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.pend.mode = false;
+    v.clk_wday = 0;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.clk_wday = 3;
+    v.comfort_days = 0;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+    v.comfort_days = 2;
+    v.have = false;
+    CHECK(!zone_setpoint_to_restore(&v, 3, 12 * 60, &c));
+}
+
 void test_zone_all(void)
 {
+    test_setpoint_restore();
     test_hw_switch_plan();
     test_hw_blob();
     test_programme();

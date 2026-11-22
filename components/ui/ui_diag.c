@@ -11,7 +11,7 @@
 static const int s_col_w[N_COLS] = { 64, 230, 110, 120, 80, 120 };
 static const char *const s_col_name[N_COLS] = { "ADDR", "ZONE", "POLLS", "TIMEOUTS", "CRC", "LAST SEEN" };
 
-static lv_obj_t *s_scr, *s_hdr_note, *s_table, *s_none, *s_line[N_LINES];
+static lv_obj_t *s_scr, *s_hdr_note, *s_head, *s_table, *s_none, *s_log, *s_line[N_LINES];
 static lv_obj_t *s_cells[32][N_COLS];
 static uint32_t s_built;
 static uint8_t s_read_addrs[32];
@@ -34,9 +34,9 @@ static void fmt_count(char *buf, size_t cap, uint32_t n)
     }
 }
 
-static lv_obj_t *table_row(void)
+static lv_obj_t *table_row(lv_obj_t *parent)
 {
-    lv_obj_t *r = ui_row(s_table, 0);
+    lv_obj_t *r = ui_row(parent, 0);
     lv_obj_set_height(r, 34);
     lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_border_color(r, C_BORDER, 0);
@@ -48,17 +48,12 @@ static void rebuild(void)
 {
     lv_obj_clean(s_table);
     memset(s_cells, 0, sizeof s_cells);
-    lv_obj_t *head = table_row();
-    for (int c = 0; c < N_COLS; c++) {
-        lv_obj_t *l = ui_caption(head, s_col_name[c]);
-        lv_obj_set_width(l, s_col_w[c]);
-    }
     s_built = zone_store_list();
     for (int i = 0; i < 32; i++) {
         if (!(s_built & (1u << i))) {
             continue;
         }
-        lv_obj_t *r = table_row();
+        lv_obj_t *r = table_row(s_table);
         for (int c = 0; c < N_COLS; c++) {
             lv_obj_t *l = ui_label(r, c == 1 ? F_LABEL : &hm_bc600_20, C_TEXT, "");
             lv_obj_set_width(l, s_col_w[c]);
@@ -73,8 +68,10 @@ static void rebuild(void)
     }
     if (s_built) {
         lv_obj_add_flag(s_none, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(s_head, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_remove_flag(s_none, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_head, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -114,10 +111,33 @@ static void show_table(void)
     }
 }
 
+/* One frame as text with its first `shown` bytes, and an ellipsis if any of
+ * the frame is left out. */
+static void frame_text(char *buf, size_t cap, const zone_frame_t *x, int shown)
+{
+    size_t k = (size_t)snprintf(buf, cap, "%s", x->tx ? "TX" : "RX");
+    if (!x->tx && x->rx == ZONE_RX_TIMEOUT) {
+        snprintf(buf + k, cap - k, " timeout %u ms", x->timeout_ms);
+        return;
+    }
+    for (int b = 0; b < shown && k + 4 < cap; b++) {
+        k += (size_t)snprintf(buf + k, cap - k, " %02X", x->b[b]);
+    }
+    if (x->len > shown && k < cap) {
+        k += (size_t)snprintf(buf + k, cap - k, " " ELLIPSIS);
+    }
+    if (k < cap && !x->tx && x->rx == ZONE_RX_CRC) {
+        snprintf(buf + k, cap - k, "   CRC error");
+    } else if (k < cap && !x->tx && x->rx == ZONE_RX_BAD) {
+        snprintf(buf + k, cap - k, "   not understood");
+    }
+}
+
 static void show_frames(void)
 {
     zone_frame_t f[N_LINES];
     size_t n = zone_store_frames(f, N_LINES);
+    const int32_t room = lv_obj_get_content_width(s_log);
     for (size_t i = 0; i < N_LINES; i++) {
         lv_obj_t *l = s_line[i];
         if (i >= n) {
@@ -125,21 +145,15 @@ static void show_frames(void)
             continue;
         }
         const zone_frame_t *x = &f[i];
-        char buf[80];
-        int k = snprintf(buf, sizeof buf, "%s ", x->tx ? "TX" : "RX");
-        if (!x->tx && x->rx == ZONE_RX_TIMEOUT) {
-            snprintf(buf + k, sizeof buf - (size_t)k, " timeout %u ms", x->timeout_ms);
-        } else {
-            for (int b = 0; b < x->n && k < (int)sizeof buf - 8; b++) {
-                k += snprintf(buf + k, sizeof buf - (size_t)k, " %02X", x->b[b]);
-            }
-            if (x->len > x->n) {
-                k += snprintf(buf + k, sizeof buf - (size_t)k, " " ELLIPSIS);
-            }
-            if (!x->tx && x->rx == ZONE_RX_CRC) {
-                snprintf(buf + k, sizeof buf - (size_t)k, "   CRC error");
-            } else if (!x->tx && x->rx == ZONE_RX_BAD) {
-                snprintf(buf + k, sizeof buf - (size_t)k, "   not understood");
+        /* As many bytes as the line holds; the ellipsis only when some of
+         * the frame does not fit (or was not kept). */
+        char buf[128];
+        for (int shown = x->n; shown >= 0; shown--) {
+            frame_text(buf, sizeof buf, x, shown);
+            lv_point_t size;
+            lv_text_get_size(&size, buf, &hm_bc600_20, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            if (size.x <= room || room <= 0) {
+                break;
             }
         }
         lv_label_set_text(l, buf);
@@ -221,16 +235,29 @@ static lv_obj_t *diag_create(void)
     lv_obj_set_flex_grow(tp, 1);
     lv_obj_set_style_pad_hor(tp, 14, 0);
     lv_obj_set_style_pad_ver(tp, 4, 0);
+    lv_obj_set_flex_flow(tp, LV_FLEX_FLOW_COLUMN);
+    /* The headings stay put; the rows under them scroll. */
+    s_head = table_row(tp);
+    for (int c = 0; c < N_COLS; c++) {
+        lv_obj_t *l = ui_caption(s_head, s_col_name[c]);
+        lv_obj_set_width(l, s_col_w[c]);
+    }
     s_table = ui_col(tp, 0);
-    lv_obj_set_size(s_table, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_width(s_table, LV_PCT(100));
+    lv_obj_set_flex_grow(s_table, 1);
     lv_obj_add_flag(s_table, LV_OBJ_FLAG_SCROLLABLE);
+    /* Rows and labels take no touches, so the table must, or a drag lands
+     * on the screen behind it and nothing scrolls. */
+    lv_obj_add_flag(s_table, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_scroll_dir(s_table, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_table, LV_SCROLLBAR_MODE_ACTIVE);
     s_none = ui_label(tp, F_BODY, C_MUTED, "No zones yet. Scan the bus from Zones and scan.");
+    lv_obj_add_flag(s_none, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_center(s_none);
 
     lv_obj_t *bottom = ui_row(body, GAP);
     lv_obj_set_height(bottom, 6 + 16 + N_LINES * 18 + 14);
-    lv_obj_t *log = ui_panel(bottom);
+    lv_obj_t *log = s_log = ui_panel(bottom);
     lv_obj_set_height(log, LV_PCT(100));
     lv_obj_set_flex_grow(log, 1);
     lv_obj_set_style_bg_color(log, C_LOG, 0);

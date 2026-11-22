@@ -215,6 +215,60 @@ uint8_t zone_comfort_at(const hm_period_t p[4], int m)
     return last >= 0 ? p[last].temp : 0;
 }
 
+/* Which comfort period is in force at minute m: its index, or 4 + the index
+ * of the day's last period before the first one starts (last night's level
+ * carrying over), or -1 if the day has none. */
+static int comfort_period_at(const hm_period_t p[4], int m)
+{
+    int best = -1, last = -1;
+    for (int i = 0; i < 4; i++) {
+        int t = minute_of(&p[i]);
+        if (t < 0) {
+            continue;
+        }
+        if (last < 0 || t >= minute_of(&p[last])) {
+            last = i;
+        }
+        if (t <= m && (best < 0 || t >= minute_of(&p[best]))) {
+            best = i;
+        }
+    }
+    return best >= 0 ? best : last >= 0 ? 4 + last : -1;
+}
+
+bool zone_setpoint_to_restore(const zone_view_t *v, int new_wday, int new_minute, uint8_t *out)
+{
+    if (!v->have || v->comfort_days == 0 || v->holiday_h || v->pend.mode || v->pend.comfort ||
+        zone_view_shown_mode(v) != HM_MODE_HEAT || v->clk_wday < 1 || v->clk_wday > 7 ||
+        v->clk_hour > 23 || v->clk_min > 59) {
+        return false;
+    }
+    const int day = zone_prog_day(v->comfort_days, v->clk_wday);
+    const int m = v->clk_hour * 60 + v->clk_min;
+    const int period = comfort_period_at(v->comfort[day], m);
+    if (period < 0) {
+        return false;
+    }
+    const uint8_t want = zone_view_shown_set(v);
+    if (want == zone_comfort_at(v->comfort[day], m)) {
+        return false; /* following the programme: nothing to lose */
+    }
+    /* Without a hold, an override ends at the next comfort level anyway; if
+     * the corrected clock is past it, let it end. */
+    const bool hold = v->pend.hold ? v->pend.hold_min > 0 : v->hold_min > 0;
+    if (!hold) {
+        if (new_wday < 1 || new_wday > 7 || new_minute < 0 || new_minute > 1439) {
+            return false;
+        }
+        const int nday = zone_prog_day(v->comfort_days, new_wday);
+        if (nday != day || comfort_period_at(v->comfort[nday], new_minute) != period) {
+            return false;
+        }
+    }
+    *out = want;
+    return true;
+}
+
 bool zone_hw_timer_on(const hm_period_t on[4], const hm_period_t off[4], int m)
 {
     for (int i = 0; i < 4; i++) {
@@ -410,27 +464,31 @@ size_t zone_hw_encode(const zone_hw_saved_t *e, size_t n, uint8_t *out, size_t c
         for (int b = 0; b < 4; b++) {
             p[2 + b] = (uint8_t)(e[i].end_utc >> (8 * b));
         }
+        p[6] = (uint8_t)e[i].len_min;
+        p[7] = (uint8_t)(e[i].len_min >> 8);
     }
     return (size_t)(p - out);
 }
 
 int zone_hw_decode(const uint8_t *in, size_t len, zone_hw_saved_t *e, size_t cap)
 {
-    if (len < 2 || in[0] != ZONE_HW_BLOB_VERSION) {
+    if (len < 2 || (in[0] != ZONE_HW_BLOB_VERSION && in[0] != 1)) {
         return -1;
     }
+    const size_t size = in[0] == 1 ? ZONE_HW_ENTRY_SIZE_V1 : ZONE_HW_ENTRY_SIZE;
     size_t n = in[1];
-    if (n > HM_SCHED_MAX_STATS || n > cap || len != 2 + n * ZONE_HW_ENTRY_SIZE) {
+    if (n > HM_SCHED_MAX_STATS || n > cap || len != 2 + n * size) {
         return -1;
     }
     const uint8_t *p = in + 2;
-    for (size_t i = 0; i < n; i++, p += ZONE_HW_ENTRY_SIZE) {
+    for (size_t i = 0; i < n; i++, p += size) {
         if (p[0] < HM_STAT_ADDR_MIN || p[0] > HM_STAT_ADDR_MAX || p[1] > ZONE_HW_BOOST) {
             return -1;
         }
         e[i].addr = p[0];
         e[i].mode = p[1];
         e[i].end_utc = (uint32_t)p[2] | ((uint32_t)p[3] << 8) | ((uint32_t)p[4] << 16) | ((uint32_t)p[5] << 24);
+        e[i].len_min = size == ZONE_HW_ENTRY_SIZE ? (uint16_t)(p[6] | (p[7] << 8)) : 0;
     }
     return (int)n;
 }

@@ -126,7 +126,7 @@ typedef struct {
     zone_rx_t rx;                /* rx only */
     uint16_t  len;               /* whole frame */
     uint8_t   n;                 /* bytes in b */
-    uint8_t   b[10];
+    uint8_t   b[24];
     uint16_t  timeout_ms;
 } zone_frame_t;
 /* The last bus frames, oldest first. */
