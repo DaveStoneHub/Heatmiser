@@ -1,5 +1,34 @@
 # Bench: milestone 5, hot water on Matter
 
+## Bench results (22 Nov 2026)
+
+**Gate passed.** Firmware from main at a848a5b (PR #19), all 12 stats on the
+bus, Aqara Hub M3 and Apple Home on the bridge.
+
+| Check | Result |
+| --- | --- |
+| Hot water endpoint | Endpoint 14 (0x000E), stat 3. The 12 thermostats kept endpoints 2 to 13 |
+| Shows in Apple Home | Without re-pairing, as "Hot water", shown as a power socket (Display As can change that) |
+| Shows in Aqara Home | Without re-pairing, as "A4254000": Aqara reads names only at pairing, so it was renamed in the app |
+| On with the timer off, from both apps | 60 minute boost |
+| Off during a boost with the timer off | Back to the timer |
+| Off with the timer on (Sun 13:50, Apple Home) | Forced off for 491 min, to the end of the timer period at 22:00; stat confirmed; countdown on the screen |
+| Boost across a reset | Carried on, minutes left correct |
+| Boost across a power cycle, board off 5 min | Carried on, still counting down accurately |
+| Boost end | Due 14:26, ended on time: back to the timer, `stat 3 hot water timer: confirmed (1 attempt)` |
+
+Found on the way, fixed in PR #20:
+
+- **"Force off" lit during a held off.** The screen highlighted the Force off
+  button for an Off from Matter, although the hold ends with the timer
+  period. A held off now lights no mode button, as a boost does.
+- **Bare `chip[EM]:` and `chip[IM]:` lines in the log**, mostly about 5 s
+  after boot. The Matter SDK prints the line header with printf and only the
+  text through the log filter. The bridge now filters whole lines.
+
+Still to watch: the held off ending at 22:00 on its own, and section 4 (the
+stat's own buttons during a boost).
+
 Milestone 5 puts the PRT/HW-N's hot water (stat 3) on Matter, and makes a
 boost survive a restart. The bridge gets one new bridged endpoint, a switch
 called "Hot water" (an On/Off Plug-in Unit, which every controller shows).
