@@ -283,13 +283,6 @@ static void write_done_locked(const hm_event_t *ev)
     const char *why = wdone_reason(ev->wdone);
 #define MATCH(field) (id->field == ev->write_id || id->field == 0)
     switch (ev->write.addr) {
-    case HM_UA_CLOCK:
-        /* The stat has gone back to its programme: put the override back. */
-        if (s_restore_set[i] && ok) {
-            s_restore_due[i] = s_restore_set[i];
-        }
-        s_restore_set[i] = 0;
-        break;
     case HM_UA_SET_TEMP:
         if (v->pend.set_temp && MATCH(set)) {
             if (!ok) {
@@ -354,7 +347,11 @@ static void write_done_locked(const hm_event_t *ev)
     case HM_UA_CLOCK:
         if (!ok) {
             notice_locked("%s: clock not set (%s)", v->cfg.name, why);
+        } else if (s_restore_set[i]) {
+            /* The stat has gone back to its programme: put the override back. */
+            s_restore_due[i] = s_restore_set[i];
         }
+        s_restore_set[i] = 0;
         break;
     default:
         for (int d = 0; d < 7; d++) {
