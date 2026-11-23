@@ -230,8 +230,20 @@ It reports these for you to judge: stats offline, failed writes, Wi-Fi drops
 and Matter controllers.
 
 The PC must stay awake for the week. Turn off sleep, and keep the USB cable
-in. If the PC does sleep, the log has a gap, but the bridge's `up_s` in the
-next health line still shows whether the bridge restarted. Run
+in. In Windows' power plan, under *Advanced settings → USB settings*, turn
+**USB selective suspend** off too, or Windows may drop the serial port.
+
+If Windows does drop the port, the logger notes it, waits for the port to
+come back and carries on by itself. If the logger itself stopped, start it
+again with the same log file, and it picks the week up where it was:
+
+```
+python tools/week_logger.py --port COM5 --log week-20261122-2213.log
+```
+
+The time it couldn't see shows as a logger gap, not a failure. The bridge's
+`up_s` in the next health line still shows whether the bridge restarted, and
+the logger fails the gate if it did. Run
 `python tools/week_logger.py --parse <log>` to re-check a log at any time.
 
 ## What to send back

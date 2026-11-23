@@ -16,9 +16,16 @@ a summary and a verdict. The gate fails on:
 Stats offline, failed writes, Wi-Fi drops and Matter controllers are
 reported for you to judge.
 
+If Windows drops the USB serial port (sleep, a USB power saving or a driver
+reset), the logger notes it, waits for the port to come back and carries on.
+The time it could not see is reported as a logger gap, not a stall; the
+bridge's up_s in the next health line still shows whether it restarted.
+Re-running with --log on an existing log picks the week up where it was.
+
     pip install pyserial
     python tools/week_logger.py --port COM5              # 7 days
     python tools/week_logger.py --port COM5 --hours 24   # a shorter run
+    python tools/week_logger.py --port COM5 --log week-20261122-2213.log   # resume
     python tools/week_logger.py --parse week-20261123-0900.log
     python tools/week_logger.py --self-test
 """
@@ -61,12 +68,26 @@ class Tracker:
         self.offline_hours = {}
         self.max_drops = 0
         self.notices = 0
+        self.blind = False        # the logger has lost the port
+        self.blind_since = None
+        self.gaps = []            # (start, seconds) the logger could not see
+        self.last_up = None
 
     def feed(self, line, now):
         if self.t0 is None:
             self.t0 = now
             self.last_health_at = now
         self.t_last = now
+        if line.startswith('LOGGER port lost'):
+            if not self.blind:
+                self.blind, self.blind_since = True, now
+            return 'GAP'
+        if line.startswith('LOGGER port back'):
+            if self.blind:
+                self.gaps.append((self.blind_since, now - self.blind_since))
+            self.blind = False
+            self.last_health_at = now
+            return 'GAP'
         if line.startswith('HMBRIDGE-BOOT'):
             self.resets.append((now, kv(line).get('reset_reason', '?')))
             return 'RESET'
@@ -85,6 +106,11 @@ class Tracker:
             self.first = h
         self.last = h
         up = num(h, 'up_s')
+        if self.last_up is not None and up < self.last_up:
+            # Missed the boot line (the logger was not listening), but the
+            # uptime went backwards: the board restarted.
+            self.resets.append((now, 'seen from up_s'))
+        self.last_up = up
         if num(h, 'time') == 1:
             self.had_time = True
         elif self.had_time:
@@ -99,6 +125,8 @@ class Tracker:
         return 'HEALTH'
 
     def check_stall(self, now):
+        if self.blind:
+            return False
         if self.last_health_at and now - self.last_health_at > STALL_S:
             self.stalls += 1
             self.last_health_at = now
@@ -126,6 +154,9 @@ class Tracker:
             print('Stats offline (health lines):', ', '.join(f'stat {a}: {n}' for a, n in
                                                           sorted(self.offline_hours.items(), key=lambda x: int(x[0]))))
         print(f'Notices: {self.notices}')
+        if self.gaps:
+            print(f'Logger gaps (port lost, not counted as stalls): {len(self.gaps)}, '
+                  f'{sum(g for _, g in self.gaps) / 3600:.1f} h in all')
         print(f'Resets: {len(self.resets)}', ''.join(f'\n  reset_reason={r}' for _, r in self.resets))
         print(f'Rollbacks: {len(self.rollbacks)}, stalls: {self.stalls}, '
               f'clock writes overdue: {len(self.clock_late)}, time lost: {self.time_lost}')
@@ -156,11 +187,7 @@ def parse_file(path):
     return t.report()
 
 
-def run(args):
-    try:
-        import serial
-    except ImportError:
-        sys.exit('pyserial is missing: pip install pyserial')
+def open_port(serial, args):
     ser = serial.Serial()
     ser.port = args.port
     ser.baudrate = args.baud
@@ -168,17 +195,79 @@ def run(args):
     ser.dtr = False   # opening the port must not reset the board
     ser.rts = False
     ser.open()
+    return ser
+
+
+def run(args):
+    try:
+        import serial
+    except ImportError:
+        sys.exit('pyserial is missing: pip install pyserial')
     logname = args.log or dt.datetime.now().strftime('week-%Y%m%d-%H%M.log')
-    log = open(logname, 'a', encoding='utf-8')
-    print(f'Logging to {logname} for {args.hours} h. Ctrl+C stops and prints the summary.')
     t = Tracker()
-    time.sleep(1.0)
-    ser.write(b'\r\nhealth\r\n')
-    end = time.time() + args.hours * 3600
+    start = time.time()
+    resumed = False
+    try:
+        with open(logname, encoding='utf-8', errors='replace') as f:
+            for raw in f:
+                stamp = raw.split(' | ', 1)[0] if ' | ' in raw[:40] else None
+                try:
+                    when = dt.datetime.fromisoformat(stamp).timestamp() if stamp else None
+                except ValueError:
+                    when = None
+                if when is None:
+                    continue
+                if not resumed:
+                    start, resumed = when, True
+                t.check_stall(when)
+                t.feed(strip(raw), when)
+    except FileNotFoundError:
+        pass
+    log = open(logname, 'a', encoding='utf-8')
+
+    def note(line, when=None):
+        when = time.time() if when is None else when
+        stamp = dt.datetime.fromtimestamp(when).isoformat(timespec='milliseconds')
+        log.write(f'{stamp} | {line}\n')
+        log.flush()
+        return t.feed(line, when), stamp
+
+    end = start + args.hours * 3600
+    if resumed:
+        print(f'Resuming {logname}: started {dt.datetime.fromtimestamp(start):%a %d %b %H:%M}, '
+              f'{t.health_lines} health lines so far, ends {dt.datetime.fromtimestamp(end):%a %d %b %H:%M}.')
+        # Stamped where the log stopped, so a re-parse sees the gap too.
+        note('LOGGER port lost (logger stopped)', t.t_last)
+        note('LOGGER port back (logger resumed)')
+    else:
+        print(f'Logging to {logname} for {args.hours} h. Ctrl+C stops and prints the summary.')
+    ser = None
     buf = b''
     try:
         while time.time() < end:
-            chunk = ser.read(256)
+            if ser is None:
+                try:
+                    ser = open_port(serial, args)
+                except (serial.SerialException, OSError):
+                    time.sleep(5)
+                    continue
+                if t.blind:
+                    _, stamp = note('LOGGER port back')
+                    print(f'{stamp[5:19]} port {args.port} is back')
+                time.sleep(1.0)
+                ser.write(b'\r\nhealth\r\n')
+                buf = b''
+            try:
+                chunk = ser.read(256)
+            except (serial.SerialException, OSError) as e:
+                _, stamp = note(f'LOGGER port lost ({e})')
+                print(f'{stamp[5:19]} lost port {args.port} ({e}); waiting for it to come back')
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                ser = None
+                continue
             now = time.time()
             if chunk:
                 buf += chunk
@@ -187,10 +276,7 @@ def run(args):
                     line = strip(raw.decode('utf-8', errors='replace').strip('\r'))
                     if not line:
                         continue
-                    stamp = dt.datetime.now().isoformat(timespec='milliseconds')
-                    log.write(f'{stamp} | {line}\n')
-                    log.flush()
-                    kind = t.feed(line, now)
+                    kind, stamp = note(line)
                     if kind in ('RESET', 'ROLLBACK', 'HEALTH'):
                         print(f'{stamp[5:19]} {line}')
                     if kind == 'RESET':
@@ -201,7 +287,8 @@ def run(args):
         pass
     finally:
         log.close()
-        ser.close()
+        if ser is not None:
+            ser.close()
     return t.report(args.hours)
 
 
@@ -230,6 +317,15 @@ def self_test():
     t.feed(good.format(up=3600, p=0, c=0, age=60), t0)
     t.feed('HMBRIDGE-OTA rollback version=v0.6.1', t0 + 10)
     assert not t.ok(), 'a rollback fails'
+    t = Tracker()
+    t.feed(good.format(up=3600, p=0, c=0, age=60), t0)
+    t.feed('LOGGER port lost (GetOverlappedResult failed)', t0 + 600)
+    t.check_stall(t0 + 6 * 3600)
+    t.feed('LOGGER port back', t0 + 6 * 3600)
+    t.feed(good.format(up=3600 + 6 * 3600, p=0, c=0, age=60), t0 + 6 * 3600 + 5)
+    assert t.ok() and len(t.gaps) == 1, 'a lost port is a logger gap, not a stall'
+    t.feed(good.format(up=200, p=0, c=0, age=60), t0 + 7 * 3600)
+    assert not t.ok(), 'uptime going backwards is a reset'
     print('self-test passed')
     return 0
 
