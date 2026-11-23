@@ -242,15 +242,22 @@ def run(args):
     else:
         print(f'Logging to {logname} for {args.hours} h. Ctrl+C stops and prints the summary.')
     ser = None
+    last_open_err = None
     buf = b''
     try:
         while time.time() < end:
             if ser is None:
                 try:
                     ser = open_port(serial, args)
-                except (serial.SerialException, OSError):
+                except (serial.SerialException, OSError) as e:
+                    if str(e) != last_open_err:
+                        last_open_err = str(e)
+                        print(f'{dt.datetime.now():%m-%d %H:%M:%S} cannot open {args.port} ({e}); '
+                              'retrying every 5 s. Is idf.py monitor or another logger still open?')
                     time.sleep(5)
                     continue
+                last_open_err = None
+                print(f'{dt.datetime.now():%m-%d %H:%M:%S} listening on {args.port}; asked the bridge for a health line')
                 if t.blind:
                     _, stamp = note('LOGGER port back')
                     print(f'{stamp[5:19]} port {args.port} is back')
