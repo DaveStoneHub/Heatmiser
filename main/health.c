@@ -58,7 +58,7 @@ void health_print(void)
     zone_clock_info_t ck;
     zone_store_clock_info(&ck);
     const time_t now = time(NULL);
-    const long clk_age = ck.last_utc && now > (time_t)ck.last_utc ? (long)(now - (time_t)ck.last_utc) : -1;
+    const long clk_age = ck.last_utc && now >= (time_t)ck.last_utc ? (long)(now - (time_t)ck.last_utc) : -1;
     net_status_t ns;
     net_status(&ns);
     matter_status_t ms;
