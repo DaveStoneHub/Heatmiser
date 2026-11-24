@@ -116,6 +116,8 @@ class Tracker:
         elif self.had_time:
             self.time_lost += 1
         age = num(h, 'clk_age_s', -1)
+        if age < 0 and num(h, 'clk_ok') > 0:
+            age = 0   # firmware v0.6.0 prints -1 in the second a clock write lands
         if up > 26 * 3600 and (age < 0 or age > CLOCK_MAX_AGE_S):
             self.clock_late.append((now, age))
         for a in h.get('offline', '-').split(','):
@@ -170,7 +172,11 @@ class Tracker:
 
 def strip(raw):
     line = raw.split(' | ', 1)[1] if ' | ' in raw[:40] else raw
-    return re.sub(r'^(hm> )+', '', line.strip())
+    line = re.sub(r'^(hm> )+', '', line.strip())
+    # A bridge line can arrive behind the console prompt's escape codes or
+    # another line's tail: start it at its own marker.
+    i = line.find('HMBRIDGE-')
+    return line[i:] if i > 0 else line
 
 
 def parse_file(path):
@@ -333,6 +339,11 @@ def self_test():
     assert t.ok() and len(t.gaps) == 1, 'a lost port is a logger gap, not a stall'
     t.feed(good.format(up=200, p=0, c=0, age=60), t0 + 7 * 3600)
     assert not t.ok(), 'uptime going backwards is a reset'
+    t = Tracker()
+    t.feed(good.format(up=30 * 3600, p=0, c=12, age=-1), t0)
+    assert t.ok(), 'clk_age_s=-1 right after a write is not overdue'
+    assert strip('\x1b[0Khm> HMBRIDGE-HEALTH up_s=1').startswith('HMBRIDGE-HEALTH')
+    assert strip('2026-11-24T08:10:10.000 | I (1) x: y HMBRIDGE-HEALTH up_s=1') == 'HMBRIDGE-HEALTH up_s=1'
     print('self-test passed')
     return 0
 
