@@ -18,8 +18,10 @@ reported for you to judge.
 
 If Windows drops the USB serial port (sleep, a USB power saving or a driver
 reset), the logger notes it, waits for the port to come back and carries on.
-The time it could not see is reported as a logger gap, not a stall; the
-bridge's up_s in the next health line still shows whether it restarted.
+If the port stays open but goes quiet for 65 minutes, it reopens it and asks
+for a health line. A silence of 2.5 hours counts as a logger gap, not a
+stall, only when the logger lost or reopened the port in it and the bridge's
+up_s ran on with the clock; a restart still fails the gate.
 Re-running with --log on an existing log picks the week up where it was.
 
     pip install pyserial
@@ -37,6 +39,7 @@ import time
 
 KV = re.compile(r'(\w+)=("[^"]*"|\S+)')
 STALL_S = 2.5 * 3600
+POKE_S = 65 * 60          # silent this long: reopen the port and ask for health
 CLOCK_MAX_AGE_S = 26 * 3600
 
 
@@ -72,21 +75,20 @@ class Tracker:
         self.blind_since = None
         self.gaps = []            # (start, seconds) the logger could not see
         self.last_up = None
+        self.marker = False       # a LOGGER line since the last health line
+        self.warned = False
 
     def feed(self, line, now):
         if self.t0 is None:
             self.t0 = now
             self.last_health_at = now
         self.t_last = now
-        if line.startswith('LOGGER port lost'):
-            if not self.blind:
-                self.blind, self.blind_since = True, now
-            return 'GAP'
-        if line.startswith('LOGGER port back'):
-            if self.blind:
-                self.gaps.append((self.blind_since, now - self.blind_since))
-            self.blind = False
-            self.last_health_at = now
+        if line.startswith('LOGGER'):
+            self.marker = True
+            if line.startswith('LOGGER port lost'):
+                self.blind = True
+            elif line.startswith('LOGGER port back'):
+                self.blind = False
             return 'GAP'
         if line.startswith('HMBRIDGE-BOOT'):
             self.resets.append((now, kv(line).get('reset_reason', '?')))
@@ -100,12 +102,25 @@ class Tracker:
         if not line.startswith('HMBRIDGE-HEALTH'):
             return None
         h = kv(line)
+        up = num(h, 'up_s')
+        if self.health_lines and now - self.last_health_at > STALL_S:
+            # A long silence. If the logger itself lost or reopened the port
+            # in it, and the bridge's uptime ran on with the clock, the bridge
+            # was fine and the logger was blind: a logger gap. Otherwise the
+            # bridge stopped printing: a stall.
+            gap = now - self.last_health_at
+            ran_on = self.last_up is not None and abs((up - self.last_up) - gap) < 900
+            if self.marker and ran_on:
+                self.gaps.append((self.last_health_at, gap))
+            else:
+                self.stalls += 1
+        self.marker = False
+        self.warned = False
         self.health_lines += 1
         self.last_health_at = now
         if self.first is None:
             self.first = h
         self.last = h
-        up = num(h, 'up_s')
         if self.last_up is not None and up < self.last_up:
             # Missed the boot line (the logger was not listening), but the
             # uptime went backwards: the board restarted.
@@ -127,19 +142,25 @@ class Tracker:
         return 'HEALTH'
 
     def check_stall(self, now):
-        if self.blind:
+        """True once per silence, for a live warning. Whether a silence counts
+        as a stall is decided when the next health line comes (or at the end)."""
+        if self.blind or self.warned:
             return False
         if self.last_health_at and now - self.last_health_at > STALL_S:
-            self.stalls += 1
-            self.last_health_at = now
+            self.warned = True
             return True
         return False
+
+    def finish(self, now):
+        if self.health_lines and now - self.last_health_at > STALL_S:
+            self.stalls += 1
 
     def ok(self):
         return not self.resets and not self.rollbacks and not self.stalls and not self.clock_late \
             and not self.time_lost and self.health_lines > 0
 
-    def report(self, want_hours=None):
+    def report(self, want_hours=None, now=None):
+        self.finish(now if now is not None else (self.t_last or 0))
         print('\n==== Week summary ====')
         span = (self.t_last - self.t0) / 3600 if self.t0 is not None and self.t_last is not None else 0
         print(f'Logged {span:.1f} h, {self.health_lines} health lines')
@@ -249,6 +270,7 @@ def run(args):
         print(f'Logging to {logname} for {args.hours} h. Ctrl+C stops and prints the summary.')
     ser = None
     last_open_err = None
+    last_poke = time.time()
     buf = b''
     try:
         while time.time() < end:
@@ -294,6 +316,17 @@ def run(args):
                         print(f'{stamp[5:19]} {line}')
                     if kind == 'RESET':
                         print('!! The board reset: the gate fails.')
+            if ser is not None and t.last_health_at and now - max(t.last_health_at, last_poke) > POKE_S:
+                # Windows can leave a port open but silent. Reopen it and ask.
+                last_poke = now
+                note(f'LOGGER port reopen (no health line for {POKE_S // 60} min)')
+                print(f'{dt.datetime.now():%m-%d %H:%M:%S} no health line for {POKE_S // 60} min; reopening {args.port}')
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                ser = None
+                continue
             if t.check_stall(now):
                 print('!! No health line for 2.5 hours: board hung or console lost.')
     except KeyboardInterrupt:
@@ -302,7 +335,7 @@ def run(args):
         log.close()
         if ser is not None:
             ser.close()
-    return t.report(args.hours)
+    return t.report(args.hours, time.time())
 
 
 def self_test():
@@ -323,7 +356,7 @@ def self_test():
     assert not t.ok(), 'a clock write older than 26 h fails'
     t = Tracker()
     t.feed(good.format(up=3600, p=0, c=0, age=-1), t0)
-    t.check_stall(t0 + 3 * 3600)
+    t.finish(t0 + 3 * 3600)
     assert not t.ok(), 'no health line for 3 h is a stall'
     assert kv('HMBRIDGE-OTA rollback version=v0.6.1') == {'version': 'v0.6.1'}
     t = Tracker()
@@ -337,6 +370,21 @@ def self_test():
     t.feed('LOGGER port back', t0 + 6 * 3600)
     t.feed(good.format(up=3600 + 6 * 3600, p=0, c=0, age=60), t0 + 6 * 3600 + 5)
     assert t.ok() and len(t.gaps) == 1, 'a lost port is a logger gap, not a stall'
+    t = Tracker()
+    t.feed(good.format(up=3600, p=0, c=0, age=60), t0)
+    t.feed(good.format(up=3600 + 4 * 3600, p=0, c=0, age=60), t0 + 4 * 3600)
+    assert not t.ok(), 'silence with no logger event is a stall'
+    t = Tracker()
+    t.feed(good.format(up=3600, p=0, c=0, age=60), t0)
+    t.feed('LOGGER port lost (access denied)', t0 + 3.6 * 3600)
+    t.feed('LOGGER port back', t0 + 3.6 * 3600 + 5)
+    t.feed(good.format(up=3600 + 4 * 3600, p=0, c=0, age=60), t0 + 4 * 3600)
+    assert t.ok() and len(t.gaps) == 1, 'a port that went silent then errored is a logger gap'
+    t = Tracker()
+    t.feed(good.format(up=3600, p=0, c=0, age=60), t0)
+    t.feed('LOGGER port lost (x)', t0 + 600)
+    t.feed(good.format(up=100, p=0, c=0, age=60), t0 + 4 * 3600)
+    assert not t.ok(), 'a gap that hides a restart still fails'
     t.feed(good.format(up=200, p=0, c=0, age=60), t0 + 7 * 3600)
     assert not t.ok(), 'uptime going backwards is a reset'
     t = Tracker()
