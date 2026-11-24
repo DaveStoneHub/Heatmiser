@@ -5,7 +5,8 @@ master for Heatmiser V3 thermostats (PRT-N and PRT/HW-N) and shows them on its
 touchscreen and to Matter controllers as thermostats.
 
 The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
-wire protocol is Heatmiser's V3.9 RS485 protocol document.
+wire protocol is Heatmiser's V3.9 RS485 protocol document. How the firmware
+is put together as built is in [docs/architecture.md](docs/architecture.md).
 
 ## Status: milestone 6, clock sync, settings, updates (week-long gate running)
 

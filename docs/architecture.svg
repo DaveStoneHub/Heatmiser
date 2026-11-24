@@ -1,0 +1,257 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 1200" width="1680" height="1200" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<defs>
+<marker id="e2563eb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+<marker id="s2563eb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+<marker id="eea580c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ea580c"/></marker>
+<marker id="sea580c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ea580c"/></marker>
+<marker id="e64748b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+<marker id="s64748b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+<marker id="e7c3aed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/></marker>
+<marker id="s7c3aed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7c3aed"/></marker>
+<marker id="e0f172a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f172a"/></marker>
+<marker id="s0f172a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f172a"/></marker>
+</defs>
+<rect width="1680" height="1200" fill="#ffffff"/>
+<text x="40" y="46" font-size="26" font-weight="800" fill="#0f172a">Heatmiser Matter bridge: architecture as built</text>
+<text x="40" y="70" font-size="14" fill="#475569">Firmware v0.6.0 (milestone 6) on a Waveshare ESP32-S3-Touch-LCD-7. ESP-IDF 6.1, esp-matter, LVGL 9 via esp_lvgl_port.</text>
+<rect x="1180" y="96" width="460" height="120" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+<text x="1194" y="118" font-size="14" font-weight="700" fill="#0f172a">Data flows</text>
+<line x1="1196" y1="136" x2="1236" y2="136" stroke="#2563eb" stroke-width="2.5" marker-end="url(#e2563eb)"/>
+<text x="1248" y="140" font-size="12.5" fill="#334155">State: stat readings up to the screen and Matter</text>
+<line x1="1196" y1="157" x2="1236" y2="157" stroke="#ea580c" stroke-width="2.5" marker-end="url(#eea580c)"/>
+<text x="1248" y="161" font-size="12.5" fill="#334155">Commands: setpoint, mode, lock, hot water, clock</text>
+<line x1="1196" y1="178" x2="1236" y2="178" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#e7c3aed)"/>
+<text x="1248" y="182" font-size="12.5" fill="#334155">Time, updates and health</text>
+<line x1="1196" y1="199" x2="1236" y2="199" stroke="#64748b" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#e64748b)"/>
+<text x="1248" y="203" font-size="12.5" fill="#334155">Saved state (NVS / flash) and internal calls</text>
+<rect x="40" y="96" width="400" height="120" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="52" y="118" font-size="15" font-weight="700" fill="#0f172a">Matter controllers (3 fabrics)</text>
+<text x="52" y="137.5" font-size="12.5" fill="#334155">Aqara Hub M3, Apple Home and a third controller</text>
+<text x="52" y="155.0" font-size="12.5" fill="#334155">Matter over Wi-Fi; pairing over BLE (QR / 11-digit</text>
+<text x="52" y="172.5" font-size="12.5" fill="#334155">code on the Matter screen), up to 5 fabrics</text>
+<rect x="600" y="96" width="300" height="120" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="612" y="118" font-size="15" font-weight="700" fill="#0f172a">Home Wi-Fi and internet</text>
+<text x="612" y="137.5" font-size="12.5" fill="#334155">Wi-Fi access point (2.4 GHz)</text>
+<text x="612" y="155.0" font-size="12.5" fill="#334155">SNTP time servers</text>
+<text x="612" y="172.5" font-size="12.5" fill="#334155">LAN: PC running ota_serve.py</text>
+<rect x="940" y="96" width="200" height="120" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="952" y="118" font-size="15" font-weight="700" fill="#0f172a">GitHub Releases</text>
+<text x="952" y="137" font-size="12" fill="#334155">davestonehub/heatmiser</text>
+<text x="952" y="154" font-size="12" fill="#334155">v* tag: Release workflow</text>
+<text x="952" y="171" font-size="12" fill="#334155">builds and publishes</text>
+<text x="952" y="188" font-size="12" fill="#334155">heatmiser_bridge.bin</text>
+<rect x="20" y="246" width="1640" height="700" rx="14" fill="#fffbf5" stroke="#b45309" stroke-width="2.5"/>
+<text x="1640" y="908" font-size="16" font-weight="800" fill="#92400e" text-anchor="end">Waveshare ESP32-S3-Touch-LCD-7</text>
+<text x="1640" y="928" font-size="12.5" fill="#78350f" text-anchor="end">ESP32-S3 N16R8: 16 MB flash, 8 MB PSRAM, Wi-Fi + BLE</text>
+<rect x="40" y="292" width="400" height="160" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+<text x="52" y="314" font-size="15" font-weight="700" fill="#0f172a">esp-matter / CHIP task</text>
+<text x="430" y="314" font-size="11.5" text-anchor="end" fill="#475569">core 0</text>
+<text x="52" y="333" font-size="12" fill="#334155">Node: root ep 0, Aggregator ep 1</text>
+<text x="52" y="350" font-size="12" fill="#334155">11 + 1 bridged Thermostats (heat only):</text>
+<text x="52" y="367" font-size="12" fill="#334155">  Thermostat, UI config (key lock), Bridged</text>
+<text x="52" y="384" font-size="12" fill="#334155">  Basic Info (NodeLabel = zone name, Reachable)</text>
+<text x="52" y="401" font-size="12" fill="#334155">1 bridged On/Off Plug-in Unit &quot;Hot water&quot;</text>
+<text x="52" y="418" font-size="12" fill="#334155">attr_cb: controller writes, endpoint IDs saved</text>
+<rect x="480" y="292" width="200" height="160" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+<text x="492" y="314" font-size="15" font-weight="700" fill="#0f172a">mt_sync task</text>
+<text x="670" y="314" font-size="11.5" text-anchor="end" fill="#475569">core 0</text>
+<text x="492" y="333" font-size="12" fill="#334155">every 500 ms</text>
+<text x="492" y="350" font-size="12" fill="#334155">takes the zones the</text>
+<text x="492" y="367" font-size="12" fill="#334155">Matter reader has not</text>
+<text x="492" y="384" font-size="12" fill="#334155">seen, then</text>
+<text x="492" y="401" font-size="12" fill="#334155">attribute::update under</text>
+<text x="492" y="418" font-size="12" fill="#334155">the CHIP stack lock</text>
+<rect x="720" y="292" width="180" height="160" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="732" y="314" font-size="15" font-weight="700" fill="#0f172a">net</text>
+<text x="732" y="333" font-size="12" fill="#334155">Wi-Fi station</text>
+<text x="732" y="350" font-size="12" fill="#334155">(driver owned by</text>
+<text x="732" y="367" font-size="12" fill="#334155">Matter once it runs)</text>
+<text x="732" y="384" font-size="12" fill="#334155">SNTP clock</text>
+<text x="732" y="401" font-size="12" fill="#334155">POSIX TZ (UK default)</text>
+<text x="732" y="418" font-size="12" fill="#334155">retry 2-60 s</text>
+<rect x="940" y="292" width="200" height="160" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="952" y="314" font-size="15" font-weight="700" fill="#0f172a">ota task</text>
+<text x="952" y="333" font-size="12" fill="#334155">on demand: Check /</text>
+<text x="952" y="350" font-size="12" fill="#334155">Install, or &#x27;ota&#x27;</text>
+<text x="952" y="367" font-size="12" fill="#334155">HTTPS (GitHub) or</text>
+<text x="952" y="384" font-size="12" fill="#334155">HTTP (LAN) to other slot</text>
+<text x="952" y="401" font-size="12" fill="#334155">trial: kept once a stat</text>
+<text x="952" y="418" font-size="12" fill="#334155">answers, rollback 300 s</text>
+<rect x="1180" y="292" width="460" height="160" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1192" y="314" font-size="15" font-weight="700" fill="#0f172a">Flash 16 MB</text>
+<text x="1192" y="333" font-size="12" fill="#334155">nvs: zones/list (addr, model, name, endpoint ID),</text>
+<text x="1192" y="350" font-size="12" fill="#334155">  poll, master, hw overrides, hwep*, Wi-Fi, PIN hash,</text>
+<text x="1192" y="367" font-size="12" fill="#334155">  timezone, screen timeout, Matter fabrics and keys</text>
+<text x="1192" y="384" font-size="12" fill="#334155">otadata  |  ota_0 4 MB  |  ota_1 4 MB</text>
+<text x="1192" y="401" font-size="12" fill="#334155">fctry (Matter factory data)  |  littlefs</text>
+<rect x="40" y="500" width="260" height="150" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="52" y="522" font-size="15" font-weight="700" fill="#0f172a">Console REPL (UART0)</text>
+<text x="52" y="541" font-size="12" fill="#334155">bench, poll, zone, ui, matter,</text>
+<text x="52" y="558" font-size="12" fill="#334155">health, ota, pin commands</text>
+<text x="52" y="575" font-size="12" fill="#334155">health timer: one</text>
+<text x="52" y="592" font-size="12" fill="#334155">HMBRIDGE-HEALTH line an hour</text>
+<text x="52" y="609" font-size="12" fill="#334155">HMBRIDGE-BOOT at every reset</text>
+<rect x="340" y="500" width="900" height="150" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2.2"/>
+<text x="352" y="522" font-size="15" font-weight="700" fill="#0f172a">zone_store: the hub between the bus, the screen and Matter (mutex guarded)</text>
+<text x="352" y="545" font-size="12.5" fill="#334155">One zone_view per stat: live DCB values, programme,</text>
+<text x="352" y="564" font-size="12.5" fill="#334155">stat clock, online/offline, pending (unconfirmed) writes</text>
+<text x="352" y="583" font-size="12.5" fill="#334155">Dirty bits with one copy per reader (UI, Matter)</text>
+<text x="352" y="602" font-size="12.5" fill="#334155">Notices for toasts: failed write, scan result</text>
+<text x="352" y="621" font-size="12.5" fill="#334155">Listens to hm_poller events; queues writes back to it</text>
+<text x="800" y="545" font-size="12.5" fill="#334155">esp_timers: boost_check every 5 s</text>
+<text x="800" y="564" font-size="12.5" fill="#334155">clock_check every 60 s: daily 03:10 sync, or a</text>
+<text x="800" y="583" font-size="12.5" fill="#334155">  stat more than 2 min out; override put back after</text>
+<text x="800" y="602" font-size="12.5" fill="#334155">Hot water boost / forced on / off survive a restart</text>
+<text x="800" y="621" font-size="12.5" fill="#334155">Bus counters and frame trace for diagnostics</text>
+<rect x="1280" y="500" width="360" height="150" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+<text x="1292" y="522" font-size="15" font-weight="700" fill="#0f172a">LVGL task: Copper UI</text>
+<text x="1630" y="522" font-size="11.5" text-anchor="end" fill="#475569">core 1</text>
+<text x="1292" y="541" font-size="12" fill="#334155">Dashboard, quick adjust, Zone detail, Hot water</text>
+<text x="1292" y="558" font-size="12" fill="#334155">and boost, Schedule and HW timer editors,</text>
+<text x="1292" y="575" font-size="12" fill="#334155">Rename, Settings (PIN), Zones and scan, Bus</text>
+<text x="1292" y="592" font-size="12" fill="#334155">diagnostics, Matter (QR, controllers), System</text>
+<text x="1292" y="609" font-size="12" fill="#334155">refresh 200 ms, tick 1 s, blank on idle</text>
+<rect x="340" y="694" width="900" height="172" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.8"/>
+<text x="600" y="716" font-size="15" font-weight="700" fill="#0f172a">hm_bus task: sole owner of the RS485 bus</text>
+<text x="1230" y="716" font-size="11.5" text-anchor="end" fill="#475569">core 0, priority 10</text>
+<rect x="360" y="728" width="190" height="128" rx="8" fill="#ffffff" stroke="#818cf8" stroke-width="1.5"/>
+<text x="372" y="750" font-size="14" font-weight="700" fill="#0f172a">hm_poller</text>
+<text x="372" y="768.5" font-size="11.5" fill="#334155">runs the scheduler</text>
+<text x="372" y="785.0" font-size="11.5" fill="#334155">event listeners</text>
+<text x="372" y="801.5" font-size="11.5" fill="#334155">write queue API</text>
+<text x="372" y="818.0" font-size="11.5" fill="#334155">frame trace ring</text>
+<rect x="583" y="728" width="190" height="128" rx="8" fill="#ffffff" stroke="#818cf8" stroke-width="1.5"/>
+<text x="595" y="750" font-size="14" font-weight="700" fill="#0f172a">hm_sched</text>
+<text x="595" y="768.5" font-size="11.5" fill="#334155">1 writes first</text>
+<text x="595" y="785.0" font-size="11.5" fill="#334155">2 round-robin full-DCB</text>
+<text x="595" y="801.5" font-size="11.5" fill="#334155">   poll (10 s default)</text>
+<text x="595" y="818.0" font-size="11.5" fill="#334155">read-back confirm, retries</text>
+<text x="595" y="834.5" font-size="11.5" fill="#334155">offline after 3, retry 60 s</text>
+<text x="595" y="851.0" font-size="11.5" fill="#334155">scan addresses 1-32</text>
+<rect x="806" y="728" width="190" height="128" rx="8" fill="#ffffff" stroke="#818cf8" stroke-width="1.5"/>
+<text x="818" y="750" font-size="14" font-weight="700" fill="#0f172a">hm_proto</text>
+<text x="818" y="768.5" font-size="11.5" fill="#334155">V3 frames, CRC-16</text>
+<text x="818" y="785.0" font-size="11.5" fill="#334155">  (CCITT-FALSE)</text>
+<text x="818" y="801.5" font-size="11.5" fill="#334155">DCB decode by model</text>
+<text x="818" y="818.0" font-size="11.5" fill="#334155">write encoders and</text>
+<text x="818" y="834.5" font-size="11.5" fill="#334155">read-back checks</text>
+<rect x="1029" y="728" width="190" height="128" rx="8" fill="#ffffff" stroke="#818cf8" stroke-width="1.5"/>
+<text x="1041" y="750" font-size="14" font-weight="700" fill="#0f172a">hm_bus</text>
+<text x="1041" y="768.5" font-size="11.5" fill="#334155">UART1 4800 8N1</text>
+<text x="1041" y="785.0" font-size="11.5" fill="#334155">one transaction at a</text>
+<text x="1041" y="801.5" font-size="11.5" fill="#334155">time, reply timeout</text>
+<text x="1041" y="818.0" font-size="11.5" fill="#334155">1 s, 100 ms gap</text>
+<text x="1041" y="834.5" font-size="11.5" fill="#334155">master 0x81 (saved)</text>
+<path d="M 552 788 L 581 788" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<path d="M 775 788 L 804 788" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<path d="M 998 788 L 1027 788" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<rect x="1280" y="694" width="360" height="112" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1292" y="716" font-size="15" font-weight="700" fill="#0f172a">Display hardware</text>
+<text x="1292" y="735" font-size="12" fill="#334155">7&quot; IPS 800 x 480 RGB panel (ST7262), two</text>
+<text x="1292" y="752" font-size="12" fill="#334155">frame buffers in PSRAM, bounce buffers</text>
+<text x="1292" y="769" font-size="12" fill="#334155">GT911 touch (I2C), CH422G backlight on/off</text>
+<rect x="40" y="878" width="260" height="52" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="52" y="900" font-size="13" font-weight="700" fill="#0f172a">USB-C &quot;UART&quot; port</text>
+<text x="52" y="919" font-size="12" fill="#334155">UART0 console, 115200</text>
+<rect x="1020" y="884" width="210" height="50" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1032" y="906" font-size="13" font-weight="700" fill="#0f172a">RS485 transceiver</text>
+<text x="1032" y="924.5" font-size="11.5" fill="#334155">on board, auto direction, 120 Ω</text>
+<text x="340" y="900" font-size="12" fill="#475569">PSRAM holds frame buffers, the LVGL heap, Matter endpoints and every malloc over 1 KB,</text>
+<text x="340" y="918" font-size="12" fill="#475569">keeping internal RAM for Wi-Fi, BLE and Matter.</text>
+<rect x="40" y="990" width="360" height="170" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="52" y="1012" font-size="15" font-weight="700" fill="#0f172a">PC (USB-C serial)</text>
+<text x="52" y="1031" font-size="12" fill="#334155">week_logger.py: logs the console, follows the</text>
+<text x="52" y="1048" font-size="12" fill="#334155">  hourly health line, gives a week-gate verdict</text>
+<text x="52" y="1065" font-size="12" fill="#334155">soak_logger.py: bus soak gate</text>
+<text x="52" y="1082" font-size="12" fill="#334155">ota_serve.py: serves a test build on :8070</text>
+<text x="52" y="1099" font-size="12" fill="#334155">hm_frame.py: build / check V3 frames by hand</text>
+<text x="52" y="1116" font-size="12" fill="#334155">idf.py flash monitor</text>
+<line x1="460" y1="1010" x2="1640" y2="1010" stroke="#0f172a" stroke-width="4"/>
+<line x1="460" y1="1017" x2="1640" y2="1017" stroke="#0f172a" stroke-width="4"/>
+<text x="460" y="1000" font-size="13" font-weight="700" fill="#0f172a">RS485 daisy chain, one twisted pair</text>
+<text x="1640" y="1000" font-size="12.5" text-anchor="end" fill="#475569">V3 protocol, addresses 1-32, one master</text>
+<line x1="520" y1="1017" x2="520" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="460" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="472" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="472" y="1101" font-size="12" fill="#334155">room stat</text>
+<line x1="660" y1="1017" x2="660" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="600" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="612" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="612" y="1101" font-size="12" fill="#334155">room stat</text>
+<line x1="800" y1="1017" x2="800" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="740" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="752" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="752" y="1101" font-size="12" fill="#334155">room stat</text>
+<line x1="940" y1="1017" x2="940" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="880" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="892" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="892" y="1101" font-size="12" fill="#334155">room stat</text>
+<line x1="1080" y1="1017" x2="1080" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="1020" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="1032" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="1032" y="1101" font-size="12" fill="#334155">room stat</text>
+<line x1="1220" y1="1017" x2="1220" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="1160" y="1060" width="120" height="62" rx="8" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="1172" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT-N</text>
+<text x="1172" y="1101" font-size="12" fill="#334155">room stat</text>
+<text x="1300" y="1098" font-size="22" font-weight="700" fill="#475569" text-anchor="middle">...</text>
+<text x="1300" y="1140" font-size="12" fill="#475569" text-anchor="middle">11 PRT-N in all</text>
+<line x1="1450" y1="1017" x2="1450" y2="1060" stroke="#0f172a" stroke-width="2"/>
+<rect x="1370" y="1060" width="270" height="80" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1382" y="1082" font-size="14" font-weight="700" fill="#0f172a">PRT/HW-N</text>
+<text x="1382" y="1101" font-size="12" fill="#334155">heating stat + hot water timer</text>
+<text x="1382" y="1118" font-size="12" fill="#334155">Thermostat + &quot;Hot water&quot; in Matter</text>
+<text x="460" y="1166" font-size="12" fill="#475569">Each poll reads a stat's whole DCB (a PRT/HW-N's is 97 bytes in 5/2 mode, 293 in 7-day).</text>
+<text x="460" y="1184" font-size="12" fill="#475569">Writable over RS485: frost 17, set temp 18, on/off 21, key lock 22, run mode 23, holiday 24, hold 32, hot water 42, clock 43, comfort levels, timers.</text>
+<path d="M 200 290 L 200 218" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<rect x="204" y="224.5" width="53" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="208" y="236" font-size="11.5" fill="#2563eb" text-anchor="start" font-weight="600">reports</text>
+<path d="M 330 218 L 330 290" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#eea580c)"/>
+<rect x="334" y="224.5" width="47" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="338" y="236" font-size="11.5" fill="#ea580c" text-anchor="start" font-weight="600">writes</text>
+<path d="M 810 218 L 810 290" fill="none" stroke="#64748b" stroke-width="2.2" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<rect x="814" y="224.5" width="79" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="818" y="236" font-size="11.5" fill="#475569" text-anchor="start" font-weight="600">Wi-Fi, SNTP</text>
+<path d="M 1040 218 L 1040 290" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#e7c3aed)"/>
+<rect x="1044" y="224.5" width="40" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="1048" y="236" font-size="11.5" fill="#7c3aed" text-anchor="start" font-weight="600">HTTPS</text>
+<path d="M 478 372 L 442 372" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<path d="M 1142 372 L 1178 372" fill="none" stroke="#64748b" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#e64748b)"/>
+<path d="M 580 498 L 580 454" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<rect x="584" y="470.5" width="79" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="588" y="482" font-size="11.5" fill="#2563eb" text-anchor="start" font-weight="600">dirty zones</text>
+<path d="M 380 454 L 380 498" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#eea580c)"/>
+<rect x="384" y="470.5" width="111" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="388" y="482" font-size="11.5" fill="#ea580c" text-anchor="start" font-weight="600">zone_store_set_*</text>
+<path d="M 810 454 L 810 498" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#e7c3aed)"/>
+<rect x="814" y="470.5" width="72" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="818" y="482" font-size="11.5" fill="#7c3aed" text-anchor="start" font-weight="600">local time</text>
+<path d="M 1210 498 L 1210 454" fill="none" stroke="#64748b" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<rect x="1095" y="470.5" width="111" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="1202" y="482" font-size="11.5" fill="#64748b" text-anchor="end" font-weight="600">zones, overrides</text>
+<path d="M 1242 548 L 1278 548" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<path d="M 1278 608 L 1242 608" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#eea580c)"/>
+<path d="M 1400 692 L 1400 652" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<rect x="1404" y="664.5" width="40" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="1408" y="676" font-size="11.5" fill="#2563eb" text-anchor="start" font-weight="600">touch</text>
+<path d="M 1520 652 L 1520 692" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<rect x="1524" y="664.5" width="47" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="1528" y="676" font-size="11.5" fill="#2563eb" text-anchor="start" font-weight="600">pixels</text>
+<path d="M 420 652 L 420 726" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#eea580c)"/>
+<rect x="292" y="656.5" width="124" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="412" y="668" font-size="11.5" fill="#ea580c" text-anchor="end" font-weight="600">queue writes, scan</text>
+<path d="M 520 726 L 520 652" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#e2563eb)"/>
+<rect x="524" y="676.5" width="336" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="528" y="688" font-size="11.5" fill="#2563eb" text-anchor="start" font-weight="600">events: updated, online, offline, write done, found</text>
+<path d="M 338 575 L 302 575" fill="none" stroke="#64748b" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#e64748b)"/>
+<path d="M 170 652 L 170 876" fill="none" stroke="#64748b" stroke-width="2.2" marker-end="url(#e64748b)" marker-start="url(#s64748b)"/>
+<rect x="174" y="758.5" width="53" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="178" y="770" font-size="11.5" fill="#475569" text-anchor="start" font-weight="600">console</text>
+<path d="M 170 932 L 170 988" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#e7c3aed)" marker-start="url(#s7c3aed)"/>
+<rect x="174" y="954.5" width="105" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="178" y="966" font-size="11.5" fill="#7c3aed" text-anchor="start" font-weight="600">HMBRIDGE-HEALTH</text>
+<path d="M 1124 858 L 1124 882" fill="none" stroke="#0f172a" stroke-width="2.2" marker-end="url(#e0f172a)" marker-start="url(#s0f172a)"/>
+<path d="M 1124 936 L 1124 1006" fill="none" stroke="#0f172a" stroke-width="2.2" marker-end="url(#e0f172a)" marker-start="url(#s0f172a)"/>
+<rect x="1128" y="963.5" width="40" height="16.5" fill="#ffffff" opacity="0.92"/>
+<text x="1132" y="975" font-size="11.5" fill="#0f172a" text-anchor="start" font-weight="600">A / B</text>
+</svg>
