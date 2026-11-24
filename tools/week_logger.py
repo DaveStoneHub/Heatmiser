@@ -193,24 +193,36 @@ class Tracker:
 
 def strip(raw):
     line = raw.split(' | ', 1)[1] if ' | ' in raw[:40] else raw
-    line = re.sub(r'^(hm> )+', '', line.strip())
+    line = re.sub(r'^(hm> )+', '', line.replace('\r', ' ').strip())
     # A bridge line can arrive behind the console prompt's escape codes or
     # another line's tail: start it at its own marker.
     i = line.find('HMBRIDGE-')
     return line[i:] if i > 0 else line
 
 
+def read_log(path):
+    """(time, line) for each logged line. Split on newlines only: a line can
+    hold a bare carriage return from the console prompt, which Python would
+    otherwise take as a line end and leave its tail without a time."""
+    when = None
+    with open(path, encoding='utf-8', errors='replace', newline='\n') as f:
+        for raw in f:
+            raw = raw.rstrip('\r\n')
+            stamp = raw.split(' | ', 1)[0] if ' | ' in raw[:40] else None
+            if stamp:
+                try:
+                    when = dt.datetime.fromisoformat(stamp).timestamp()
+                except ValueError:
+                    pass
+            if when is not None:
+                yield when, strip(raw)
+
+
 def parse_file(path):
     t = Tracker()
-    with open(path, encoding='utf-8', errors='replace') as f:
-        for raw in f:
-            stamp = raw.split(' | ', 1)[0] if ' | ' in raw[:40] else None
-            try:
-                now = dt.datetime.fromisoformat(stamp).timestamp() if stamp else time.time()
-            except ValueError:
-                now = time.time()
-            t.check_stall(now)
-            t.feed(strip(raw), now)
+    for now, line in read_log(path):
+        t.check_stall(now)
+        t.feed(line, now)
     return t.report()
 
 
@@ -235,19 +247,11 @@ def run(args):
     start = time.time()
     resumed = False
     try:
-        with open(logname, encoding='utf-8', errors='replace') as f:
-            for raw in f:
-                stamp = raw.split(' | ', 1)[0] if ' | ' in raw[:40] else None
-                try:
-                    when = dt.datetime.fromisoformat(stamp).timestamp() if stamp else None
-                except ValueError:
-                    when = None
-                if when is None:
-                    continue
-                if not resumed:
-                    start, resumed = when, True
-                t.check_stall(when)
-                t.feed(strip(raw), when)
+        for when, line in read_log(logname):
+            if not resumed:
+                start, resumed = when, True
+            t.check_stall(when)
+            t.feed(line, when)
     except FileNotFoundError:
         pass
     log = open(logname, 'a', encoding='utf-8')
@@ -290,7 +294,9 @@ def run(args):
                     _, stamp = note('LOGGER port back')
                     print(f'{stamp[5:19]} port {args.port} is back')
                 time.sleep(1.0)
-                ser.write(b'\r\nhealth\r\n')
+                ser.write(b'\r\n')      # clear a half-typed line first,
+                time.sleep(0.5)          # or the console loses the 'h'
+                ser.write(b'health\r\n')
                 buf = b''
             try:
                 chunk = ser.read(256)
