@@ -30,14 +30,23 @@ identical to the PRT-N aside from it additionally controlling the hot water. All
 A 12V DC central control unit designed for Heatmiser 12V network thermostats, managing up to 32 heating and hot water zones. 
 It contained a small Colour Touch Screen (58 x 77 mm) with a stylus and allowed you to remotely program the comfort levels of all networked
 thermostats from one central point and copy program settings from one thermostat to another across the network.
+The control unit contains a Samsung S3C44B0X01L 16/32-bit RISC microprocessor built on an ARM7TDMI core, designed for embedded and low-power applications.
+
+### Key Specifications
+
+- Core & Architecture: ARM7TDMI core, SAMBA II bus architecture, 8KB cache
+- Clock Speed: Up to 66 MHz
+- Operating Voltage: 2.5V core; 3.0V to 3.6V I/O
+- Display & Audio Interfaces: LCD controller (up to 256-color DSTN), IIS-BUS
+- Connectivity & Peripherals: 2x UART with handshake, 4-ch DMA, 5-ch PWM timers, 8-ch 10-bit ADC, IIC-BUS, synchronous SIO, RTC, I/O ports, PLL clock
 
 # 21st Century
 
 The UFH system is more or less set it and forget. Everything is on a timer, for weekdays, for weekends, etc. 
 A UFH system cannot operate like a traditional heating system, as it's not very responsive.
-You more or less have to have it on all the time, keeping the house at the minimum desired setting. I would suggest
+You more or less have to have it on all the time, keeping the house at the minimum desired setting. I would guess
 that if the house was completely cold and you needed to heat it from that point, it would probably take you a week.
-Whilst it sounds dreadfully ineffecieint, our heating bills for 12+ rooms, were less than the original 3-bedroom 8-room house with traditional radiators.
+Whilst it sounds dreadfully inefficient, our heating bills for our extended 12+ rooms, were less than the original 3-bedroom 8-room house with traditional radiators.
 However, as the years passed and Internet, mobile phones, apps, etc became prevalent, and everyone was monitoring and controlling their home remotely,
 I was unable to do either. So, I set about on my journey to bring the system into the future. I tried;
 - Creating a ZWave controller that would virtualise the existing thermostats
