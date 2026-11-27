@@ -1,8 +1,58 @@
 # Bench: milestone 6, clock sync, settings, updates and the week
 
-## Bench results
+## Bench results (27 Nov 2026)
 
-_Not run yet. Fill in from the results file as the week goes._
+**Gate passed** on v0.6.0 over 4.75 days without intervention (22 Nov,
+22:13, to 27 Nov, 16:51). The run was stopped early by choice instead of
+running the full 7 days. `week_logger.py --parse`:
+
+| | |
+| --- | --- |
+| Resets, rollbacks, stalls | 0 |
+| Stats online | 12 of 12 throughout |
+| Polls | 488,147: 1 timeout, 1 CRC error, 160 bad frames, all retried |
+| Writes | 82 confirmed, 0 failed |
+| Clock writes | 60 confirmed, 0 failed; the 03:10 sync set all 12 stats every day |
+| Wi-Fi drops | 0 (a few beacon timeouts, recovered without disconnecting) |
+| Matter | Up throughout with 3 controllers; one 2-minute loss of two controllers at 03:03 on 24 Nov, recovered by itself |
+
+Sections 0 to 5, all passed:
+
+- **Clock sync.** A stat set 60 min out was corrected within a minute, and
+  a setpoint override was put back after the clock write.
+- **PIN.** Set, asked once, locked out after 5 wrong tries, and locked again
+  when the screen blanked.
+- **Master address.** At 0x82 every stat answered, and the setting survived
+  a reset.
+- **LAN update.** 2.7 MB in about 11 s; the new firmware went on trial and
+  was kept at 90 s.
+- **Rollback.** With the bus unplugged, the firmware was rolled back at 300 s.
+- **Release.** v0.6.0 was published by the workflow and installed from
+  GitHub over HTTPS in about 7 s.
+
+Found and fixed on the way:
+
+- **Boot loop.** Bluetooth ran out of internal RAM at start-up (PR #23):
+  - the controller's code now runs from PSRAM;
+  - 8 Wi-Fi transmit buffers instead of 16;
+  - malloc() blocks over 1 KB go to PSRAM.
+
+  The bridge now runs with about 22 KB of internal RAM free.
+- **Step 1.3 of this guide.** Changing a stat's clock by hand drops its
+  override, so the setpoint is raised after the clock change.
+- **Week logger** (PRs #24 and #25). Windows dropped the USB serial port 17
+  times. The logger now reconnects, reopens a silent port, and resumes a
+  log. It reads lines that carry a carriage return from the prompt, and
+  counts a gap as the logger's when the bridge's up_s ran on.
+- **Health line.** `clk_age_s` now prints 0, not -1, in the second a clock
+  write lands. This is on main for the next release.
+
+Open:
+
+- **Kitchen stat.** Nearly all of the 160 bad frames came from it, about 1
+  poll in 250: short or wrong-length replies. Every one was retried and it
+  never went offline. Check its A/B screws, the joints on its run and its
+  place in the chain, then clear the counters and compare.
 
 Milestone 6 finishes the design's last build step. The schedule editor,
 holiday for every zone, "Sync clocks now" and the bus diagnostics screen

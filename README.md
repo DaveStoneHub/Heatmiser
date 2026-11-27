@@ -8,7 +8,7 @@ The design is in the project's *Heatmiser Matter Bridge System Design* doc; the
 wire protocol is Heatmiser's V3.9 RS485 protocol document. How the firmware
 is put together as built is in [docs/architecture.md](docs/architecture.md).
 
-## Status: milestone 6, clock sync, settings, updates (week-long gate running)
+## Status: milestone 6 done, every build step in the design complete
 
 | Part | State |
 | --- | --- |
@@ -22,9 +22,9 @@ is put together as built is in [docs/architecture.md](docs/architecture.md).
 | `net`: Wi-Fi station, SNTP clock, timezone (Matter drives Wi-Fi when it runs) | Built |
 | `matter_bridge`: esp-matter bridge, an Aggregator and one bridged Thermostat per zone with saved endpoint IDs; setpoint, Heat/Off and key lock both ways; pairing screen with QR code and controller list | Done, bench proven with Aqara Hub M3 and Apple Home (milestone 4); mapping host tested |
 | `matter_bridge`, milestone 5: the PRT/HW-N's hot water as a bridged On/Off Plug-in Unit ("Hot water") with a saved endpoint ID. On boosts for 60 min, Off holds the water off until the timer period ends; never forced for good | Done, bench proven with Aqara Hub M3 and Apple Home (milestone 5); switch logic host tested |
-| Milestone 6: automatic clock sync (daily at 03:10, and whenever a stat is more than 2 min out), settings PIN, saved master address, hourly `HMBRIDGE-HEALTH` line | Built; the clock sync rule is host tested |
-| `ota`: updates from GitHub Releases (or a LAN URL for bench builds) with a version check and automatic rollback; a `v*` tag publishes a release | Built; version comparison host tested |
-| Gate: a full week running without intervention | Not run yet; see [bench-milestone6.md](docs/bench-milestone6.md) |
+| Milestone 6: automatic clock sync (daily at 03:10, and whenever a stat is more than 2 min out), settings PIN, saved master address, hourly `HMBRIDGE-HEALTH` line | Done, bench proven (milestone 6); the clock sync rule is host tested |
+| `ota`: updates from GitHub Releases (or a LAN URL for bench builds) with a version check and automatic rollback; a `v*` tag publishes a release | Done, bench proven: LAN and GitHub updates, rollback (milestone 6); version comparison host tested |
+| Gate: a full week running without intervention | Passed 27 Nov 2026 over 4.75 days (stopped early by choice); see [bench-milestone6.md](docs/bench-milestone6.md#bench-results-27-nov-2026) |
 | Gate: a boost survives a reboot and ends on time | Passed 22 Nov 2026; see [bench-milestone5.md](docs/bench-milestone5.md#bench-results-22-nov-2026) |
 | Gate: pair Aqara Hub M3 and Apple Home together, reboot and rescan without losing rooms | Passed 21 Nov 2026; see [bench-milestone4.md](docs/bench-milestone4.md#bench-results-21-nov-2026) |
 | Gate: no drift during a soak with Wi-Fi on | Passed 19 Nov 2026 (15 h 40 min); see [bench-milestone3.md](docs/bench-milestone3.md#bench-results-19-nov-2026) |
